@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { GraduationCap } from 'lucide-react';
 import {
   Select,
@@ -14,6 +15,8 @@ import { useClassStore } from '@/stores/class-store';
 import { initializeDb } from '@/lib/db/database';
 
 export function Header() {
+  const router = useRouter();
+  const pathname = usePathname();
   const { activeClassId, setActiveClass } = useAppStore();
   const { classes, loadClasses } = useClassStore();
 
@@ -28,6 +31,14 @@ export function Header() {
     }
   }, [activeClassId, classes, setActiveClass]);
 
+  const handleClassChange = (value: string) => {
+    setActiveClass(value || null);
+    // If we're on a class detail page, navigate to the new class
+    if (pathname.startsWith('/classes/') && value) {
+      router.push(`/classes/${value}`);
+    }
+  };
+
   return (
     <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
       <div className="flex h-14 items-center justify-between px-4">
@@ -39,7 +50,7 @@ export function Header() {
         {classes.length > 0 && (
           <Select
             value={activeClassId || ''}
-            onValueChange={(value) => setActiveClass(value || null)}
+            onValueChange={handleClassChange}
           >
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Select class" />

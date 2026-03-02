@@ -24,16 +24,17 @@ export const classService = {
 
   async getById(id: string): Promise<Class | null> {
     const db = await getDb();
-    const result = db.exec(
-      'SELECT id, name, academic_year, created_at, updated_at FROM classes WHERE id = ?',
-      [id]
-    );
+    const stmt = db.prepare('SELECT id, name, academic_year, created_at, updated_at FROM classes WHERE id = ?');
+    stmt.bind([id]);
 
-    if (!result.length || !result[0].values.length) {
+    if (!stmt.step()) {
+      stmt.free();
       return null;
     }
 
-    const row = result[0].values[0];
+    const row = stmt.get();
+    stmt.free();
+
     return {
       id: row[0] as string,
       name: row[1] as string,
@@ -48,10 +49,11 @@ export const classService = {
     const now = new Date().toISOString();
     const id = uuid();
 
-    db.run(
-      'INSERT INTO classes (id, name, academic_year, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-      [id, data.name, data.academicYear, now, now]
+    const stmt = db.prepare(
+      'INSERT INTO classes (id, name, academic_year, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
     );
+    stmt.run([id, data.name, data.academicYear, now, now]);
+    stmt.free();
 
     await persistDb();
 
@@ -79,10 +81,11 @@ export const classService = {
       updatedAt: now,
     };
 
-    db.run(
-      'UPDATE classes SET name = ?, academic_year = ?, updated_at = ? WHERE id = ?',
-      [updated.name, updated.academicYear, now, id]
+    const stmt = db.prepare(
+      'UPDATE classes SET name = ?, academic_year = ?, updated_at = ? WHERE id = ?'
     );
+    stmt.run([updated.name, updated.academicYear, now, id]);
+    stmt.free();
 
     await persistDb();
 
@@ -91,7 +94,9 @@ export const classService = {
 
   async delete(id: string): Promise<void> {
     const db = await getDb();
-    db.run('DELETE FROM classes WHERE id = ?', [id]);
+    const stmt = db.prepare('DELETE FROM classes WHERE id = ?');
+    stmt.run([id]);
+    stmt.free();
     await persistDb();
   },
 };

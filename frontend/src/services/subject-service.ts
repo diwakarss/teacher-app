@@ -33,36 +33,42 @@ export const IGCSE_SUBJECTS: IGCSESubjectTemplate[] = [
 export const subjectService = {
   async getByClassId(classId: string): Promise<Subject[]> {
     const db = await getDb();
-    const result = db.exec(
-      'SELECT id, name, class_id, created_at, updated_at FROM subjects WHERE class_id = ? ORDER BY name ASC',
-      [classId]
+    const stmt = db.prepare(
+      'SELECT id, name, class_id, created_at, updated_at FROM subjects WHERE class_id = ? ORDER BY name ASC'
     );
+    stmt.bind([classId]);
 
-    if (!result.length || !result[0].values.length) {
-      return [];
+    const subjects: Subject[] = [];
+    while (stmt.step()) {
+      const row = stmt.get();
+      subjects.push({
+        id: row[0] as string,
+        name: row[1] as string,
+        classId: row[2] as string,
+        createdAt: row[3] as string,
+        updatedAt: row[4] as string,
+      });
     }
+    stmt.free();
 
-    return result[0].values.map((row) => ({
-      id: row[0] as string,
-      name: row[1] as string,
-      classId: row[2] as string,
-      createdAt: row[3] as string,
-      updatedAt: row[4] as string,
-    }));
+    return subjects;
   },
 
   async getById(id: string): Promise<Subject | null> {
     const db = await getDb();
-    const result = db.exec(
-      'SELECT id, name, class_id, created_at, updated_at FROM subjects WHERE id = ?',
-      [id]
+    const stmt = db.prepare(
+      'SELECT id, name, class_id, created_at, updated_at FROM subjects WHERE id = ?'
     );
+    stmt.bind([id]);
 
-    if (!result.length || !result[0].values.length) {
+    if (!stmt.step()) {
+      stmt.free();
       return null;
     }
 
-    const row = result[0].values[0];
+    const row = stmt.get();
+    stmt.free();
+
     return {
       id: row[0] as string,
       name: row[1] as string,
@@ -77,10 +83,11 @@ export const subjectService = {
     const now = new Date().toISOString();
     const id = uuid();
 
-    db.run(
-      'INSERT INTO subjects (id, name, class_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-      [id, data.name, data.classId, now, now]
+    const stmt = db.prepare(
+      'INSERT INTO subjects (id, name, class_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
     );
+    stmt.run([id, data.name, data.classId, now, now]);
+    stmt.free();
 
     await persistDb();
 
@@ -93,20 +100,18 @@ export const subjectService = {
     };
   },
 
-  async createMany(
-    classId: string,
-    names: string[]
-  ): Promise<Subject[]> {
+  async createMany(classId: string, names: string[]): Promise<Subject[]> {
     const db = await getDb();
     const now = new Date().toISOString();
     const subjects: Subject[] = [];
 
+    const stmt = db.prepare(
+      'INSERT INTO subjects (id, name, class_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+    );
+
     for (const name of names) {
       const id = uuid();
-      db.run(
-        'INSERT INTO subjects (id, name, class_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-        [id, name, classId, now, now]
-      );
+      stmt.run([id, name, classId, now, now]);
       subjects.push({
         id,
         name,
@@ -116,6 +121,7 @@ export const subjectService = {
       });
     }
 
+    stmt.free();
     await persistDb();
     return subjects;
   },
@@ -135,11 +141,9 @@ export const subjectService = {
       updatedAt: now,
     };
 
-    db.run('UPDATE subjects SET name = ?, updated_at = ? WHERE id = ?', [
-      updated.name,
-      now,
-      id,
-    ]);
+    const stmt = db.prepare('UPDATE subjects SET name = ?, updated_at = ? WHERE id = ?');
+    stmt.run([updated.name, now, id]);
+    stmt.free();
 
     await persistDb();
 
@@ -148,13 +152,17 @@ export const subjectService = {
 
   async delete(id: string): Promise<void> {
     const db = await getDb();
-    db.run('DELETE FROM subjects WHERE id = ?', [id]);
+    const stmt = db.prepare('DELETE FROM subjects WHERE id = ?');
+    stmt.run([id]);
+    stmt.free();
     await persistDb();
   },
 
   async deleteByClassId(classId: string): Promise<void> {
     const db = await getDb();
-    db.run('DELETE FROM subjects WHERE class_id = ?', [classId]);
+    const stmt = db.prepare('DELETE FROM subjects WHERE class_id = ?');
+    stmt.run([classId]);
+    stmt.free();
     await persistDb();
   },
 };

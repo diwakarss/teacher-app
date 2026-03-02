@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { classService } from '@/services/class-service';
+import { initializeDb } from '@/lib/db/database';
 import type { Class } from '@/lib/db/schema';
 
 export type { Class };
@@ -8,6 +9,7 @@ interface ClassState {
   classes: Class[];
   loading: boolean;
   error: string | null;
+  dbInitialized: boolean;
   loadClasses: () => Promise<void>;
   createClass: (name: string, academicYear: string) => Promise<Class>;
   updateClass: (id: string, data: Partial<Class>) => Promise<Class>;
@@ -19,13 +21,20 @@ export const useClassStore = create<ClassState>((set, get) => ({
   classes: [],
   loading: false,
   error: null,
+  dbInitialized: false,
 
   loadClasses: async () => {
     set({ loading: true, error: null });
     try {
+      // Ensure DB is initialized before any operation
+      if (!get().dbInitialized) {
+        await initializeDb();
+        set({ dbInitialized: true });
+      }
       const classes = await classService.getAll();
       set({ classes, loading: false });
     } catch (error) {
+      console.error('Failed to load classes:', error);
       set({ error: (error as Error).message, loading: false });
     }
   },
@@ -33,6 +42,11 @@ export const useClassStore = create<ClassState>((set, get) => ({
   createClass: async (name: string, academicYear: string) => {
     set({ loading: true, error: null });
     try {
+      // Ensure DB is initialized before any operation
+      if (!get().dbInitialized) {
+        await initializeDb();
+        set({ dbInitialized: true });
+      }
       const newClass = await classService.create({ name, academicYear });
       set((state) => ({
         classes: [newClass, ...state.classes],
@@ -40,6 +54,7 @@ export const useClassStore = create<ClassState>((set, get) => ({
       }));
       return newClass;
     } catch (error) {
+      console.error('Failed to create class:', error);
       set({ error: (error as Error).message, loading: false });
       throw error;
     }

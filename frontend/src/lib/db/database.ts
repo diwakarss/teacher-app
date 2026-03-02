@@ -5,8 +5,9 @@ let dbInstance: Database | null = null;
 let dbPromise: Promise<Database> | null = null;
 
 async function initDatabase(): Promise<Database> {
+  // Use jsDelivr CDN - reliable and CORS-enabled
   const SQL = await initSqlJs({
-    locateFile: (file) => `/${file}`,
+    locateFile: () => 'https://cdn.jsdelivr.net/npm/sql.js@1.14.0/dist/sql-wasm.wasm',
   });
 
   const savedData = await loadDatabase();

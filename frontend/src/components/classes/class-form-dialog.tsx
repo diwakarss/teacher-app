@@ -64,6 +64,7 @@ export function ClassFormDialog({ open, onOpenChange, editClass }: ClassFormDial
       onOpenChange(false);
       setName('');
     } catch (error) {
+      console.error('Class operation failed:', error);
       toast.error(isEdit ? 'Failed to update class' : 'Failed to create class');
     } finally {
       setSaving(false);
