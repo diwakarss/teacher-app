@@ -317,4 +317,35 @@ export const questionPaperService = {
     stmt.free();
     return row[0] as number;
   },
+
+  async getRecent(limit: number = 5): Promise<QuestionPaper[]> {
+    const db = await getDb();
+    const stmt = db.prepare(
+      `SELECT id, subject_id, chapter_ids, name, total_marks, duration, difficulty, template, sections, answer_key, created_at, updated_at
+       FROM question_papers ORDER BY created_at DESC LIMIT ?`
+    );
+    stmt.bind([limit]);
+
+    const papers: QuestionPaper[] = [];
+    while (stmt.step()) {
+      const row = stmt.get();
+      papers.push({
+        id: row[0] as string,
+        subjectId: row[1] as string,
+        chapterIds: row[2] as string,
+        name: row[3] as string,
+        totalMarks: row[4] as number,
+        duration: row[5] as number,
+        difficulty: row[6] as string,
+        template: row[7] as string,
+        sections: row[8] as string,
+        answerKey: row[9] as string,
+        createdAt: row[10] as string,
+        updatedAt: row[11] as string,
+      });
+    }
+    stmt.free();
+
+    return papers;
+  },
 };

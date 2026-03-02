@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import {
   BookOpen,
   FileQuestion,
@@ -13,19 +12,19 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/stores/app-store';
 import { useClassStore } from '@/stores/class-store';
-import { useGenerationStore } from '@/stores/generation-store';
 import { lessonPlanService } from '@/services/lesson-plan-service';
 import { questionPaperService } from '@/services/question-paper-service';
 import { initializeDb } from '@/lib/db/database';
+import type { LessonPlan, QuestionPaper } from '@/lib/db/schema';
 
 export default function GeneratePage() {
   const { activeClassId } = useAppStore();
   const { classes, loadClasses } = useClassStore();
-  const { lessonPlans, questionPapers, loadLessonPlans, loadQuestionPapers } =
-    useGenerationStore();
 
   const [lessonPlanCount, setLessonPlanCount] = useState(0);
   const [questionPaperCount, setQuestionPaperCount] = useState(0);
+  const [recentLessonPlans, setRecentLessonPlans] = useState<LessonPlan[]>([]);
+  const [recentQuestionPapers, setRecentQuestionPapers] = useState<QuestionPaper[]>([]);
 
   const activeClass = classes.find((c) => c.id === activeClassId);
 
@@ -34,16 +33,20 @@ export default function GeneratePage() {
   }, [loadClasses]);
 
   useEffect(() => {
-    async function loadCounts() {
+    async function loadData() {
       await initializeDb();
-      const [lpCount, qpCount] = await Promise.all([
+      const [lpCount, qpCount, recentLp, recentQp] = await Promise.all([
         lessonPlanService.getCount(),
         questionPaperService.getCount(),
+        lessonPlanService.getRecent(3),
+        questionPaperService.getRecent(3),
       ]);
       setLessonPlanCount(lpCount);
       setQuestionPaperCount(qpCount);
+      setRecentLessonPlans(recentLp);
+      setRecentQuestionPapers(recentQp);
     }
-    loadCounts();
+    loadData();
   }, []);
 
   if (!activeClassId) {
@@ -129,44 +132,52 @@ export default function GeneratePage() {
       </div>
 
       {/* Recent Items */}
-      {(lessonPlanCount > 0 || questionPaperCount > 0) && (
+      {(recentLessonPlans.length > 0 || recentQuestionPapers.length > 0) && (
         <div className="mt-8">
-          <h2 className="mb-4 text-lg font-semibold">Quick Access</h2>
+          <h2 className="mb-4 text-lg font-semibold">Recent</h2>
           <div className="space-y-2">
-            {lessonPlanCount > 0 && (
-              <Link href="/generate/lesson-plan">
+            {recentLessonPlans.map((plan) => (
+              <Link key={plan.id} href={`/generate/lesson-plan/${plan.id}`}>
                 <Card className="cursor-pointer transition-colors hover:bg-muted/50">
                   <CardContent className="flex items-center justify-between p-3">
                     <div className="flex items-center gap-3">
                       <BookOpen className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm font-medium">
-                        View Saved Lesson Plans
-                      </span>
+                      <div>
+                        <span className="text-sm font-medium">{plan.name}</span>
+                        <p className="text-xs text-muted-foreground">
+                          {plan.duration} min • Lesson Plan
+                        </p>
+                      </div>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {lessonPlanCount} plans
-                    </span>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      {new Date(plan.createdAt).toLocaleDateString()}
+                    </div>
                   </CardContent>
                 </Card>
               </Link>
-            )}
-            {questionPaperCount > 0 && (
-              <Link href="/generate/question-paper">
+            ))}
+            {recentQuestionPapers.map((paper) => (
+              <Link key={paper.id} href={`/generate/question-paper/${paper.id}`}>
                 <Card className="cursor-pointer transition-colors hover:bg-muted/50">
                   <CardContent className="flex items-center justify-between p-3">
                     <div className="flex items-center gap-3">
                       <FileQuestion className="h-4 w-4 text-purple-600" />
-                      <span className="text-sm font-medium">
-                        View Saved Question Papers
-                      </span>
+                      <div>
+                        <span className="text-sm font-medium">{paper.name}</span>
+                        <p className="text-xs text-muted-foreground">
+                          {paper.totalMarks} marks • Question Paper
+                        </p>
+                      </div>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {questionPaperCount} papers
-                    </span>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      {new Date(paper.createdAt).toLocaleDateString()}
+                    </div>
                   </CardContent>
                 </Card>
               </Link>
-            )}
+            ))}
           </div>
         </div>
       )}

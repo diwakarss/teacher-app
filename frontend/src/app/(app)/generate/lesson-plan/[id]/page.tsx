@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   Trash2,
   Download,
+  FileText,
   Loader2,
   AlertCircle,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ import { useGenerationStore } from '@/stores/generation-store';
 import { LessonPlanPreview } from '@/components/generation/lesson-plan-preview';
 import type { LessonPlanOutput } from '@/lib/prompts/lesson-plan-prompt';
 import { LessonPlanCardSkeleton } from '@/components/ui/loading-skeleton';
+import { exportLessonPlanPdf } from '@/lib/pdf-export';
 
 export default function LessonPlanDetailPage() {
   const router = useRouter();
@@ -79,7 +81,20 @@ export default function LessonPlanDetailPage() {
     }
   };
 
-  const handleExport = () => {
+  const handleExportPdf = () => {
+    if (!currentLessonPlan) return;
+
+    exportLessonPlanPdf({
+      name: currentLessonPlan.name,
+      duration: currentLessonPlan.duration,
+      objectives: currentLessonPlan.parsedObjectives,
+      sections: currentLessonPlan.parsedSections,
+      materials: currentLessonPlan.parsedMaterials,
+    });
+    toast.success('Opening print dialog for PDF export');
+  };
+
+  const handleExportMarkdown = () => {
     if (!currentLessonPlan) return;
 
     const plan = currentLessonPlan;
@@ -142,7 +157,7 @@ ${plan.parsedMaterials.map((m) => `- ${m}`).join('\n')}
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success('Lesson plan exported');
+    toast.success('Markdown file downloaded');
   };
 
   if (loading) {
@@ -212,9 +227,13 @@ ${plan.parsedMaterials.map((m) => `- ${m}`).join('\n')}
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExport}>
+          <Button variant="outline" onClick={handleExportPdf}>
             <Download className="mr-2 h-4 w-4" />
-            Export
+            PDF
+          </Button>
+          <Button variant="outline" onClick={handleExportMarkdown}>
+            <FileText className="mr-2 h-4 w-4" />
+            Markdown
           </Button>
           <Button
             variant="outline"

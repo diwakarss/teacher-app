@@ -13,8 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Sparkles, Plus, X } from 'lucide-react';
+import { Loader2, Sparkles, Plus, X, WifiOff } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAppStore } from '@/stores/app-store';
+import { useOnlineStatus } from '@/hooks/use-online-status';
 import { useClassStore } from '@/stores/class-store';
 import { useContentStore } from '@/stores/content-store';
 import { subjectService } from '@/services/subject-service';
@@ -32,6 +34,7 @@ export function LessonPlanForm({
   generating,
   initialChapterId,
 }: LessonPlanFormProps) {
+  const isOnline = useOnlineStatus();
   const { activeClassId } = useAppStore();
   const { classes, loadClasses } = useClassStore();
   const { chapters, loadChapters } = useContentStore();
@@ -94,6 +97,11 @@ export function LessonPlanForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isOnline) {
+      toast.error('Generation requires an internet connection');
+      return;
+    }
 
     if (!selectedChapter || !selectedSubject) return;
 
@@ -245,15 +253,27 @@ export function LessonPlanForm({
             </p>
           </div>
 
+          {!isOnline && (
+            <div className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              <WifiOff className="h-4 w-4" />
+              You are offline. Generation requires an internet connection.
+            </div>
+          )}
+
           <Button
             type="submit"
             className="w-full gap-2"
-            disabled={!isValid || generating}
+            disabled={!isValid || generating || !isOnline}
           >
             {generating ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Generating...
+              </>
+            ) : !isOnline ? (
+              <>
+                <WifiOff className="h-4 w-4" />
+                Offline
               </>
             ) : (
               <>

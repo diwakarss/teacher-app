@@ -300,4 +300,33 @@ export const lessonPlanService = {
     stmt.free();
     return row[0] as number;
   },
+
+  async getRecent(limit: number = 5): Promise<LessonPlan[]> {
+    const db = await getDb();
+    const stmt = db.prepare(
+      `SELECT id, chapter_id, subject_id, name, duration, objectives, sections, materials, created_at, updated_at
+       FROM lesson_plans ORDER BY created_at DESC LIMIT ?`
+    );
+    stmt.bind([limit]);
+
+    const plans: LessonPlan[] = [];
+    while (stmt.step()) {
+      const row = stmt.get();
+      plans.push({
+        id: row[0] as string,
+        chapterId: row[1] as string,
+        subjectId: row[2] as string,
+        name: row[3] as string,
+        duration: row[4] as number,
+        objectives: row[5] as string,
+        sections: row[6] as string,
+        materials: row[7] as string | null,
+        createdAt: row[8] as string,
+        updatedAt: row[9] as string,
+      });
+    }
+    stmt.free();
+
+    return plans;
+  },
 };
