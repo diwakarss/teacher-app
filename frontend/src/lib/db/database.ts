@@ -102,12 +102,26 @@ export async function runMigrations(db: Database): Promise<void> {
       UNIQUE(student_id, assessment_id)
     );
 
+    CREATE TABLE IF NOT EXISTS feedback (
+      id TEXT PRIMARY KEY,
+      student_id TEXT NOT NULL,
+      assessment_id TEXT NOT NULL,
+      message TEXT NOT NULL,
+      tone TEXT NOT NULL,
+      performance_level TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+      FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_subjects_class_id ON subjects(class_id);
     CREATE INDEX IF NOT EXISTS idx_students_class_id ON students(class_id);
     CREATE INDEX IF NOT EXISTS idx_assessments_class_id ON assessments(class_id);
     CREATE INDEX IF NOT EXISTS idx_assessments_subject_id ON assessments(subject_id);
     CREATE INDEX IF NOT EXISTS idx_marks_student_id ON marks(student_id);
     CREATE INDEX IF NOT EXISTS idx_marks_assessment_id ON marks(assessment_id);
+    CREATE INDEX IF NOT EXISTS idx_feedback_student_id ON feedback(student_id);
+    CREATE INDEX IF NOT EXISTS idx_feedback_assessment_id ON feedback(assessment_id);
   `);
 
   await persistDb();

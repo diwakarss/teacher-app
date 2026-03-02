@@ -63,6 +63,20 @@ export const marks = sqliteTable('marks', {
   updatedAt: text('updated_at').notNull(),
 });
 
+export const feedback = sqliteTable('feedback', {
+  id: text('id').primaryKey(),
+  studentId: text('student_id')
+    .notNull()
+    .references(() => students.id, { onDelete: 'cascade' }),
+  assessmentId: text('assessment_id')
+    .notNull()
+    .references(() => assessments.id, { onDelete: 'cascade' }),
+  message: text('message').notNull(),
+  tone: text('tone').notNull(), // 'encouraging' | 'neutral' | 'serious'
+  performanceLevel: text('performance_level').notNull(), // 'excellent' | 'good' | 'average' | 'needsWork' | 'struggling'
+  createdAt: text('created_at').notNull(),
+});
+
 // Type exports for use in services
 export type Class = typeof classes.$inferSelect;
 export type NewClass = typeof classes.$inferInsert;
@@ -78,3 +92,6 @@ export type NewAssessment = typeof assessments.$inferInsert;
 
 export type Mark = typeof marks.$inferSelect;
 export type NewMark = typeof marks.$inferInsert;
+
+export type Feedback = typeof feedback.$inferSelect;
+export type NewFeedback = typeof feedback.$inferInsert;
