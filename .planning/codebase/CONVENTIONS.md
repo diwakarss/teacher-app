@@ -26,13 +26,13 @@
 
 **Types:**
 - PascalCase for types and interfaces
-- Entity types: `Class`, `Student`, `Assessment`, `Mark`, `Feedback`
+- Entity types: `Class`, `Student`, `Assessment`, `Mark`, `Feedback`, `Chapter`
 - State interfaces: `ClassState`, `StudentState`
 - Export `type` keyword for type-only exports
 
 **Constants:**
 - SCREAMING_SNAKE_CASE
-- Examples: `IGCSE_GRADES`, `ASSESSMENT_TYPES`, `FEEDBACK_TONES`
+- Examples: `IGCSE_GRADES`, `ASSESSMENT_TYPES`, `FEEDBACK_TONES`, `CHAPTER_PATTERNS`
 
 ## Code Style
 
@@ -110,6 +110,7 @@ try {
 - SQL query structure in services
 - Complex business logic (grade boundaries)
 - Type casting explanations
+- Regex patterns (chapter detection)
 
 **JSDoc/TSDoc:**
 - Not used extensively
@@ -213,6 +214,49 @@ stmt.free();
 - Controlled inputs via useState
 - Submit handlers as async functions
 - Toast for success/error feedback
+
+## Processing Progress Pattern (Phase 2)
+
+**For long-running operations:**
+```typescript
+const [progress, setProgress] = useState(0);
+const [progressText, setProgressText] = useState('');
+
+await processFile(file, (p) => {
+  setProgress(p.percentage);
+  setProgressText(`Processing page ${p.currentPage} of ${p.totalPages}...`);
+});
+```
+
+**Progress UI:**
+```typescript
+<Progress value={progress} className="w-full" />
+<p className="text-sm text-gray-600">{progressText}</p>
+```
+
+## Singleton Pattern (Phase 2)
+
+**For expensive resources:**
+```typescript
+let instance: Resource | null = null;
+let initPromise: Promise<Resource> | null = null;
+
+async function getInstance(): Promise<Resource> {
+  if (instance) return instance;
+  if (initPromise) return initPromise;
+  initPromise = createResource();
+  instance = await initPromise;
+  return instance;
+}
+
+export function cleanup(): void {
+  if (instance) {
+    instance.destroy();
+    instance = null;
+    initPromise = null;
+  }
+}
+```
 
 ## Git Conventions
 

@@ -44,7 +44,7 @@
 
 **Testing:**
 - Vitest 4.0.18 - Unit test runner
-- Playwright 1.58.2 - E2E tests (configured in package.json, no config file yet)
+- Playwright 1.58.2 - E2E tests (configured in package.json)
 - Testing Library React 16.3.2 - Component testing utilities
 - jsdom 28.1.0 - DOM environment for tests
 
@@ -58,6 +58,8 @@
 **Critical (application depends on these):**
 - `sql.js` 1.14.0 - SQLite in WebAssembly, core data layer
 - `zustand` 5.0.11 - Global state management
+- `pdfjs-dist` 4.10.38 - PDF text extraction and rendering
+- `tesseract.js` 7.0.0 - OCR for image text extraction
 - `@anthropic-ai/sdk` 0.78.0 - Installed but using direct fetch instead
 
 **Infrastructure:**
@@ -71,6 +73,7 @@
 - No `.env` files - Fully client-side application
 - API keys stored in localStorage via Zustand persist middleware
 - sql.js WASM loaded from CDN: `https://cdn.jsdelivr.net/npm/sql.js@1.14.0/dist/sql-wasm.wasm`
+- PDF.js worker loaded from CDN: `https://cdn.jsdelivr.net/npm/pdfjs-dist@{version}/build/pdf.worker.min.mjs`
 
 **Build Configuration:**
 - `next.config.ts`: PWA wrapper, WASM headers (`Content-Type: application/wasm`), React strict mode
@@ -98,7 +101,7 @@ pnpm start            # Start production server
 pnpm test             # Run Vitest in watch mode
 pnpm test:ci          # Run tests once
 pnpm test:coverage    # Run tests with coverage
-pnpm test:e2e         # Run Playwright (no config yet)
+pnpm test:e2e         # Run Playwright
 pnpm lint             # ESLint check
 pnpm typecheck        # TypeScript type check
 ```
@@ -108,6 +111,7 @@ pnpm typecheck        # TypeScript type check
 - Next.js 16 with React 19 is cutting edge (as of analysis date)
 - Tailwind CSS 4 (major version)
 - Vitest 4 (major version)
+- Tesseract.js 7 (major version with LSTM OCR)
 
 ---
 

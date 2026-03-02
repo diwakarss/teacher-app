@@ -12,6 +12,7 @@
 - Service layer for database operations
 - Optional AI enhancement via Claude API
 - Next.js App Router with route groups
+- Content processing pipeline (PDF + OCR)
 
 ## Layers
 
@@ -25,16 +26,23 @@
 ### State Layer (Zustand Stores)
 - **Purpose:** Global client state, async operation management
 - **Location:** `src/stores/`
-- **Contains:** 6 stores (app, class, student, assessment, marks, feedback)
+- **Contains:** 7 stores (app, class, student, assessment, marks, feedback, content)
 - **Depends on:** Services, database initialization
 - **Used by:** Presentation layer via hooks
 
 ### Service Layer
 - **Purpose:** Business logic and database operations
 - **Location:** `src/services/`
-- **Contains:** 6 services matching data entities
+- **Contains:** 7 services matching data entities
 - **Depends on:** Database layer
 - **Used by:** Stores
+
+### Processing Layer (Phase 2)
+- **Purpose:** Content extraction and transformation
+- **Location:** `src/lib/`
+- **Contains:** PDF extractor, OCR processor, chapter detector
+- **Depends on:** pdfjs-dist, tesseract.js
+- **Used by:** Upload dialog component
 
 ### Database Layer
 - **Purpose:** SQLite operations and persistence
@@ -49,38 +57,65 @@
 
 ```
 User Action
-    ↓
+    |
 React Component (page.tsx)
-    ↓
+    |
 Zustand Store (useXxxStore)
-    ↓ calls
+    | calls
 Service (xxxService)
-    ↓ executes SQL via
+    | executes SQL via
 sql.js Database (getDb())
-    ↓ persists to
+    | persists to
 IndexedDB (persistDb())
-    ↓ returns to
+    | returns to
 Store (updates state)
-    ↓ re-renders
+    | re-renders
 Component (React reactivity)
+```
+
+### Content Upload Flow (Phase 2)
+
+```
+User selects file (PDF or image)
+    |
+UploadDialog component
+    | if PDF
+extractTextFromPDF() -> pdfjs-dist
+    | checks for text layer
+    | if no text layer
+renderPdfPagesToImages() -> canvas rendering
+    |
+extractTextFromImages() -> tesseract.js OCR
+    | returns
+{ text, confidence }
+    |
+suggestChapterName() -> chapter-detector
+    | auto-fills form
+User confirms/edits
+    |
+contentStore.createChapter()
+    |
+chapterService.create() -> SQLite
+    |
+persistDb() -> IndexedDB
 ```
 
 ### AI Feedback Generation (Online)
 
 ```
 User clicks "Generate Feedback"
-    ↓
+    |
 feedbackStore.generateBulkFeedback()
-    ↓ checks useAI flag
+    | checks useAI flag
 feedbackService.generateFeedbackWithAI() OR generateFeedbackFromTemplate()
-    ↓ if AI
-fetch() → Claude API
-    ↓ if fails
+    | if AI
+fetch() -> Claude API
+    | if fails
 fallback to template
-    ↓
-feedbackService.create() → SQLite → IndexedDB
-    ↓
-Store updates → Component re-renders
+    |
+feedbackService.create() -> SQLite -> IndexedDB
+    |
+Store updates -> Component re-renders
 ```
 
 ### State Management Pattern
@@ -136,6 +171,37 @@ export type Student = typeof students.$inferSelect;
 export type NewStudent = typeof students.$inferInsert;
 ```
 
+### OCR Worker Singleton (Phase 2)
+- **Purpose:** Reusable Tesseract worker
+- **Location:** `src/lib/ocr-processor.ts`
+- **Pattern:** Lazy initialization with warmup option
+
+```typescript
+let worker: Worker | null = null;
+
+async function getWorker(onProgress?): Promise<Worker> {
+  if (worker) return worker;
+  worker = await createWorker('eng', Tesseract.OEM.LSTM_ONLY, { logger });
+  return worker;
+}
+```
+
+### PDF Cache (Phase 2)
+- **Purpose:** Avoid re-loading PDF for OCR fallback
+- **Location:** `src/lib/pdf-extractor.ts`
+- **Pattern:** Module-level cache with cleanup
+
+```typescript
+let cachedPdf: PDFDocumentProxy | null = null;
+
+export function clearPdfCache(): void {
+  if (cachedPdf) {
+    cachedPdf.destroy();
+    cachedPdf = null;
+  }
+}
+```
+
 ### Grade Calculation
 - **Purpose:** IGCSE grade boundaries
 - **Location:** `src/services/marks-service.ts`
@@ -178,6 +244,11 @@ try {
 }
 ```
 
+**OCR Error Handling (Phase 2):**
+- Low confidence warning shown if OCR confidence < 70%
+- User can edit extracted text before saving
+- Toast notifications for processing failures
+
 ## Cross-Cutting Concerns
 
 **Logging:** Console only (`console.error`, `console.warn`)
@@ -191,6 +262,7 @@ try {
 - Service worker via next-pwa (disabled in dev)
 - `OfflineIndicator` component shows online/offline status
 - AI features fallback to templates when offline
+- Content processing works offline (after CDN resources cached)
 
 ## Route Structure
 
@@ -206,7 +278,25 @@ src/app/
     │   └── [id]/page.tsx   # Class detail (subjects)
     ├── students/page.tsx   # Student list
     ├── marks/page.tsx      # Marks entry
-    └── feedback/page.tsx   # Feedback generation
+    ├── feedback/page.tsx   # Feedback generation
+    └── content/            # Phase 2
+        ├── page.tsx        # Chapter list by subject
+        └── [id]/page.tsx   # Chapter detail viewer
+```
+
+## Database Schema
+
+```
+classes (1) ─────── (*) subjects (1) ─────── (*) chapters
+    │                       │
+    │                       │
+    └───── (*) students     └───── (*) assessments
+              │                         │
+              │                         │
+              └─── (*) marks ───────────┘
+                       │
+                       │
+                   (*) feedback
 ```
 
 ## IGCSE Grade Boundaries

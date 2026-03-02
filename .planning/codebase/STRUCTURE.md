@@ -8,6 +8,7 @@
 frontend/
 ├── public/                     # Static assets
 │   ├── manifest.json           # PWA manifest
+│   ├── sw.js                   # Generated service worker
 │   └── icons/                  # PWA icons
 ├── src/
 │   ├── app/                    # Next.js App Router pages
@@ -19,19 +20,24 @@ frontend/
 │   │       ├── classes/        # Class management
 │   │       ├── students/       # Student management
 │   │       ├── marks/          # Marks entry
-│   │       └── feedback/       # Feedback generation
+│   │       ├── feedback/       # Feedback generation
+│   │       └── content/        # Content/chapters (Phase 2)
 │   ├── components/             # React components
 │   │   ├── ui/                 # shadcn/ui primitives
 │   │   ├── layout/             # App layout components
 │   │   ├── classes/            # Class-related components
 │   │   ├── students/           # Student-related components
 │   │   ├── marks/              # Marks-related components
-│   │   └── feedback/           # Feedback-related components
+│   │   ├── feedback/           # Feedback-related components
+│   │   └── content/            # Content components (Phase 2)
 │   ├── services/               # Business logic / DB operations
 │   ├── stores/                 # Zustand state stores
 │   ├── lib/                    # Utilities and database
 │   │   ├── db/                 # Database layer
-│   │   └── utils.ts            # Utility functions (cn)
+│   │   ├── utils.ts            # Utility functions (cn)
+│   │   ├── pdf-extractor.ts    # PDF processing (Phase 2)
+│   │   ├── ocr-processor.ts    # OCR processing (Phase 2)
+│   │   └── chapter-detector.ts # Chapter detection (Phase 2)
 │   ├── test/                   # Test setup and utilities
 │   └── types/                  # TypeScript type declarations
 ├── next.config.ts              # Next.js configuration
@@ -52,6 +58,8 @@ frontend/
   - `(app)/layout.tsx` - App shell (header, nav)
   - `(app)/page.tsx` - Dashboard
   - `(app)/*/page.tsx` - Feature pages
+  - `(app)/content/page.tsx` - Chapter list (Phase 2)
+  - `(app)/content/[id]/page.tsx` - Chapter viewer (Phase 2)
 
 ### `src/components/` - React Components
 - **Purpose:** Reusable UI components
@@ -63,6 +71,7 @@ frontend/
   - `students/` - StudentCard, StudentFormDialog
   - `marks/` - MarksEntryGrid, AssessmentFormDialog
   - `feedback/` - FeedbackCard, ApiKeyDialog
+  - `content/` - UploadDialog, ChapterCard, ContentViewer, ProcessingProgress (Phase 2)
 
 ### `src/services/` - Service Layer
 - **Purpose:** Database CRUD operations
@@ -74,6 +83,7 @@ frontend/
   - `assessment-service.ts` - Assessment CRUD
   - `marks-service.ts` - Marks CRUD + grade calculation
   - `feedback-service.ts` - Feedback CRUD + AI generation
+  - `chapter-service.ts` - Chapter CRUD + search (Phase 2)
 
 ### `src/stores/` - Zustand Stores
 - **Purpose:** Global state management
@@ -85,6 +95,7 @@ frontend/
   - `assessment-store.ts` - Assessments state
   - `marks-store.ts` - Marks state + stats calculation
   - `feedback-store.ts` - Feedbacks state + generation logic
+  - `content-store.ts` - Chapters state + processing progress (Phase 2)
 
 ### `src/lib/db/` - Database Layer
 - **Purpose:** SQLite and persistence
@@ -93,6 +104,13 @@ frontend/
   - `persist.ts` - IndexedDB save/load
   - `schema.ts` - Drizzle schema + type exports
   - `drizzle.ts` - Drizzle instance (largely unused)
+
+### `src/lib/` - Processing Utilities (Phase 2)
+- **Purpose:** Content extraction and transformation
+- **Key files:**
+  - `pdf-extractor.ts` - PDF text extraction, page rendering
+  - `ocr-processor.ts` - Tesseract.js OCR wrapper
+  - `chapter-detector.ts` - Chapter heading detection
 
 ### `src/test/` - Test Infrastructure
 - **Purpose:** Test setup and utilities
@@ -123,9 +141,15 @@ frontend/
 - `src/stores/*.ts` - State management
 - `src/lib/db/database.ts` - Database singleton
 
+**Content Processing (Phase 2):**
+- `src/lib/pdf-extractor.ts` - PDF handling
+- `src/lib/ocr-processor.ts` - OCR handling
+- `src/lib/chapter-detector.ts` - Text analysis
+
 **Testing:**
 - `src/test/setup.ts` - Test setup
 - `src/lib/utils.test.ts` - Example unit test
+- `src/lib/chapter-detector.test.ts` - Chapter detection tests (Phase 2)
 
 ## Naming Conventions
 
@@ -159,6 +183,10 @@ frontend/
 2. Add CREATE TABLE in `runMigrations()` in `src/lib/db/database.ts`
 3. Create service in `src/services/`
 4. Create store in `src/stores/`
+
+**New Processing Utility:**
+- Add to `src/lib/{utility-name}.ts`
+- Add tests as `src/lib/{utility-name}.test.ts`
 
 **Utilities:**
 - General helpers: `src/lib/utils.ts`

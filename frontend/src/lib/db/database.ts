@@ -128,6 +128,37 @@ export async function runMigrations(db: Database): Promise<void> {
       FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS lesson_plans (
+      id TEXT PRIMARY KEY,
+      chapter_id TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      duration INTEGER NOT NULL,
+      objectives TEXT NOT NULL,
+      sections TEXT NOT NULL,
+      materials TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE,
+      FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS question_papers (
+      id TEXT PRIMARY KEY,
+      subject_id TEXT NOT NULL,
+      chapter_ids TEXT NOT NULL,
+      name TEXT NOT NULL,
+      total_marks INTEGER NOT NULL,
+      duration INTEGER NOT NULL,
+      difficulty TEXT NOT NULL CHECK (difficulty IN ('easy', 'medium', 'hard', 'mixed')),
+      template TEXT NOT NULL CHECK (template IN ('unit_test', 'monthly_test', 'term_exam', 'custom')),
+      sections TEXT NOT NULL,
+      answer_key TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_subjects_class_id ON subjects(class_id);
     CREATE INDEX IF NOT EXISTS idx_students_class_id ON students(class_id);
     CREATE INDEX IF NOT EXISTS idx_assessments_class_id ON assessments(class_id);
@@ -137,6 +168,9 @@ export async function runMigrations(db: Database): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_feedback_student_id ON feedback(student_id);
     CREATE INDEX IF NOT EXISTS idx_feedback_assessment_id ON feedback(assessment_id);
     CREATE INDEX IF NOT EXISTS idx_chapters_subject_id ON chapters(subject_id);
+    CREATE INDEX IF NOT EXISTS idx_lesson_plans_chapter_id ON lesson_plans(chapter_id);
+    CREATE INDEX IF NOT EXISTS idx_lesson_plans_subject_id ON lesson_plans(subject_id);
+    CREATE INDEX IF NOT EXISTS idx_question_papers_subject_id ON question_papers(subject_id);
   `);
 
   await persistDb();

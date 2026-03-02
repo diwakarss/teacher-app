@@ -1,0 +1,84 @@
+flowchart TD
+    subgraph UI["UI Layer"]
+        LP["/generate/lesson-plan"]
+        QP["/generate/question-paper"]
+        Preview["Preview Component"]
+        Export["PDF Export"]
+    end
+
+    subgraph State["State Management"]
+        GenStore["generation-store.ts"]
+        ContentStore["content-store.ts"]
+    end
+
+    subgraph Services["Service Layer"]
+        LPService["lesson-plan-service.ts"]
+        QPService["question-paper-service.ts"]
+        ChapterService["chapter-service.ts"]
+    end
+
+    subgraph API["Next.js API Routes"]
+        GenRoute["/api/generate"]
+        Prompts["Prompt Templates"]
+    end
+
+    subgraph AWS["AWS Bedrock"]
+        BedrockClient["BedrockRuntimeClient"]
+        ConverseAPI["Converse API"]
+        ClaudeHaiku["Claude 3 Haiku"]
+    end
+
+    subgraph Data["Data Layer"]
+        LPTable["lesson_plans table"]
+        QPTable["question_papers table"]
+        ChaptersTable["chapters table"]
+        DB["sql.js + IndexedDB"]
+    end
+
+    subgraph ExportLayer["Export Layer"]
+        PDFGen["PDF Generator"]
+        HTMLPrint["HTML Print View"]
+    end
+
+    %% User flow
+    LP --> GenStore
+    QP --> GenStore
+    GenStore --> LPService
+    GenStore --> QPService
+
+    %% Service to data
+    LPService --> ChapterService
+    QPService --> ChapterService
+    ChapterService --> ChaptersTable
+
+    %% AI integration via API route
+    LPService --> GenRoute
+    QPService --> GenRoute
+    GenRoute --> Prompts
+    GenRoute --> BedrockClient
+    BedrockClient --> ConverseAPI
+    ConverseAPI --> ClaudeHaiku
+
+    %% Storage
+    LPService --> LPTable
+    QPService --> LPTable
+    QPService --> QPTable
+    LPTable --> DB
+    QPTable --> DB
+    ChaptersTable --> DB
+
+    %% Preview and export
+    GenStore --> Preview
+    Preview --> Export
+    Export --> PDFGen
+    Export --> HTMLPrint
+
+    %% Styling
+    classDef existing fill:#90EE90,stroke:#228B22
+    classDef new fill:#87CEEB,stroke:#4169E1
+    classDef external fill:#FFB6C1,stroke:#DC143C
+    classDef api fill:#DDA0DD,stroke:#9932CC
+
+    class ChapterService,ChaptersTable,ContentStore,DB existing
+    class LP,QP,GenStore,LPService,QPService,LPTable,QPTable,Preview,Export,PDFGen,HTMLPrint,Prompts,GenRoute new
+    class BedrockClient,ConverseAPI,ClaudeHaiku,AWS external

@@ -113,3 +113,43 @@ export type NewFeedback = typeof feedback.$inferInsert;
 
 export type Chapter = typeof chapters.$inferSelect;
 export type NewChapter = typeof chapters.$inferInsert;
+
+export const lessonPlans = sqliteTable('lesson_plans', {
+  id: text('id').primaryKey(),
+  chapterId: text('chapter_id')
+    .notNull()
+    .references(() => chapters.id, { onDelete: 'cascade' }),
+  subjectId: text('subject_id')
+    .notNull()
+    .references(() => subjects.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  duration: integer('duration').notNull(), // minutes
+  objectives: text('objectives').notNull(), // JSON array
+  sections: text('sections').notNull(), // JSON: intro, content, activities, assessment
+  materials: text('materials'), // JSON array
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const questionPapers = sqliteTable('question_papers', {
+  id: text('id').primaryKey(),
+  subjectId: text('subject_id')
+    .notNull()
+    .references(() => subjects.id, { onDelete: 'cascade' }),
+  chapterIds: text('chapter_ids').notNull(), // JSON array of chapter IDs
+  name: text('name').notNull(),
+  totalMarks: integer('total_marks').notNull(),
+  duration: integer('duration').notNull(), // minutes
+  difficulty: text('difficulty').notNull(), // 'easy' | 'medium' | 'hard' | 'mixed'
+  template: text('template').notNull(), // 'unit_test' | 'monthly_test' | 'term_exam' | 'custom'
+  sections: text('sections').notNull(), // JSON: Section A/B/C with questions
+  answerKey: text('answer_key').notNull(), // JSON
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export type LessonPlan = typeof lessonPlans.$inferSelect;
+export type NewLessonPlan = typeof lessonPlans.$inferInsert;
+
+export type QuestionPaper = typeof questionPapers.$inferSelect;
+export type NewQuestionPaper = typeof questionPapers.$inferInsert;

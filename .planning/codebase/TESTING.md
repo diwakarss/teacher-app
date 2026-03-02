@@ -17,7 +17,7 @@
 pnpm test              # Run in watch mode
 pnpm test:ci           # Run once (CI mode)
 pnpm test:coverage     # Run with v8 coverage
-pnpm test:e2e          # Playwright (no config yet)
+pnpm test:e2e          # Playwright
 ```
 
 ## Test File Organization
@@ -31,12 +31,14 @@ pnpm test:e2e          # Playwright (no config yet)
 src/
 ├── lib/
 │   ├── utils.ts
-│   └── utils.test.ts      # Co-located test
+│   ├── utils.test.ts              # Co-located test
+│   ├── chapter-detector.ts
+│   └── chapter-detector.test.ts   # Co-located test (Phase 2)
 ├── services/
-│   └── marks-service.ts   # No tests yet
+│   └── marks-service.ts           # No tests yet
 └── test/
-    ├── setup.ts           # Vitest setup
-    └── test-utils.tsx     # Custom render
+    ├── setup.ts                   # Vitest setup
+    └── test-utils.tsx             # Custom render
 ```
 
 ## Test Structure
@@ -123,9 +125,10 @@ const mockSubmit = vi.fn();
 - Browser APIs (matchMedia, IndexedDB, clipboard)
 - Database operations (sql.js)
 - External API calls (Claude)
+- Heavy dependencies (pdfjs-dist, tesseract.js)
 
 **What NOT to Mock:**
-- Pure functions (calculateIGCSEGrade, cn)
+- Pure functions (calculateIGCSEGrade, cn, detectChapters)
 - React components (use Testing Library render)
 
 ## Custom Render
@@ -200,7 +203,7 @@ pnpm test:coverage
 **Unit Tests:**
 - Scope: Pure functions, utilities
 - Location: Co-located `*.test.ts`
-- Current: `src/lib/utils.test.ts` only
+- Current: `src/lib/utils.test.ts`, `src/lib/chapter-detector.test.ts`
 
 **Integration Tests:**
 - Scope: Components with state
@@ -242,17 +245,50 @@ describe('Button', () => {
 });
 ```
 
+**Testing Chapter Detection (Phase 2):**
+```typescript
+describe('detectChapters', () => {
+  it('detects "Chapter X: Title" format', () => {
+    const text = `Chapter 1: Introduction
+This is the introduction content.
+
+Chapter 2: Getting Started
+This is chapter 2 content.`;
+
+    const chapters = detectChapters(text);
+
+    expect(chapters).toHaveLength(2);
+    expect(chapters[0].name).toBe('Introduction');
+    expect(chapters[0].chapterNumber).toBe(1);
+  });
+
+  it('returns empty array for text without chapters', () => {
+    const text = `This is just regular text.
+No chapter markers here.`;
+
+    const chapters = detectChapters(text);
+
+    expect(chapters).toHaveLength(0);
+  });
+});
+```
+
 ## Test Gaps (Current State)
 
+**Tested:**
+- `cn()` utility function (3 tests)
+- `detectChapters()` function (8 tests) - Phase 2
+- `detectChapterFromFilename()` function (6 tests) - Phase 2
+- `suggestChapterName()` function (6 tests) - Phase 2
+
 **Not Tested:**
-- Services (class, student, assessment, marks, feedback)
-- Stores (all 6 stores)
+- Services (class, student, assessment, marks, feedback, chapter)
+- Stores (all 7 stores)
 - Components (all feature components)
 - Database operations
 - AI integration
-
-**Only Tested:**
-- `cn()` utility function (3 tests)
+- PDF extraction
+- OCR processing
 
 ## Recommended Testing Priorities
 
@@ -269,6 +305,7 @@ describe('Button', () => {
 3. **Lower Priority:**
    - UI components (shadcn/ui mostly pre-tested)
    - E2E workflows
+   - PDF/OCR processing (hard to test, low ROI)
 
 ---
 
