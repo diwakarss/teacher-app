@@ -4,16 +4,28 @@ import {
   type GenerateLessonPlanParams,
   type LessonPlanWithParsed,
 } from '@/services/lesson-plan-service';
+import {
+  questionPaperService,
+  type GenerateQuestionPaperParams,
+  type QuestionPaperWithParsed,
+} from '@/services/question-paper-service';
 import { initializeDb } from '@/lib/db/database';
-import type { LessonPlan } from '@/lib/db/schema';
+import type { LessonPlan, QuestionPaper } from '@/lib/db/schema';
 import type { LessonPlanOutput } from '@/lib/prompts/lesson-plan-prompt';
+import type { QuestionPaperOutput } from '@/lib/prompts/question-paper-prompt';
 
 interface GenerationState {
   // Lesson Plans
   lessonPlans: LessonPlan[];
   currentLessonPlan: LessonPlanWithParsed | null;
   pendingLessonPlan: LessonPlanOutput | null;
-  pendingParams: GenerateLessonPlanParams | null;
+  pendingLessonPlanParams: GenerateLessonPlanParams | null;
+
+  // Question Papers
+  questionPapers: QuestionPaper[];
+  currentQuestionPaper: QuestionPaperWithParsed | null;
+  pendingQuestionPaper: QuestionPaperOutput | null;
+  pendingQuestionPaperParams: GenerateQuestionPaperParams | null;
 
   // Loading states
   loading: boolean;
@@ -31,15 +43,37 @@ interface GenerationState {
     data: Partial<LessonPlan>
   ) => Promise<LessonPlan>;
   deleteLessonPlan: (id: string) => Promise<void>;
+
+  // Question Paper actions
+  loadQuestionPapers: (subjectId?: string) => Promise<void>;
+  loadQuestionPaperById: (id: string) => Promise<void>;
+  generateQuestionPaper: (params: GenerateQuestionPaperParams) => Promise<void>;
+  savePendingQuestionPaper: () => Promise<QuestionPaper>;
+  updateQuestionPaper: (
+    id: string,
+    data: Partial<QuestionPaper>
+  ) => Promise<QuestionPaper>;
+  deleteQuestionPaper: (id: string) => Promise<void>;
+
+  // Shared actions
   clearPending: () => void;
   clearError: () => void;
 }
 
 export const useGenerationStore = create<GenerationState>((set, get) => ({
+  // Lesson Plans
   lessonPlans: [],
   currentLessonPlan: null,
   pendingLessonPlan: null,
-  pendingParams: null,
+  pendingLessonPlanParams: null,
+
+  // Question Papers
+  questionPapers: [],
+  currentQuestionPaper: null,
+  pendingQuestionPaper: null,
+  pendingQuestionPaperParams: null,
+
+  // Loading states
   loading: false,
   generating: false,
   error: null,
@@ -92,7 +126,7 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
       const output = await lessonPlanService.generate(params);
       set({
         pendingLessonPlan: output,
-        pendingParams: params,
+        pendingLessonPlanParams: params,
         generating: false,
       });
     } catch (error) {
@@ -103,8 +137,8 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
   },
 
   savePendingLessonPlan: async () => {
-    const { pendingLessonPlan, pendingParams } = get();
-    if (!pendingLessonPlan || !pendingParams) {
+    const { pendingLessonPlan, pendingLessonPlanParams } = get();
+    if (!pendingLessonPlan || !pendingLessonPlanParams) {
       throw new Error('No pending lesson plan to save');
     }
 
@@ -112,13 +146,13 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     try {
       await initializeDb();
       const saved = await lessonPlanService.saveGenerated(
-        pendingParams,
+        pendingLessonPlanParams,
         pendingLessonPlan
       );
       set((state) => ({
         lessonPlans: [saved, ...state.lessonPlans],
         pendingLessonPlan: null,
-        pendingParams: null,
+        pendingLessonPlanParams: null,
         loading: false,
       }));
       return saved;
@@ -167,8 +201,132 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     }
   },
 
+  // Question Paper actions
+  loadQuestionPapers: async (subjectId?: string) => {
+    set({ loading: true, error: null });
+    try {
+      await initializeDb();
+      const papers = subjectId
+        ? await questionPaperService.getBySubjectId(subjectId)
+        : await questionPaperService.getAll();
+      set({ questionPapers: papers, loading: false });
+    } catch (error) {
+      console.error('Failed to load question papers:', error);
+      set({ error: (error as Error).message, loading: false });
+    }
+  },
+
+  loadQuestionPaperById: async (id: string) => {
+    set({ loading: true, error: null, currentQuestionPaper: null });
+    try {
+      await initializeDb();
+      const paper = await questionPaperService.getById(id);
+      if (!paper) {
+        throw new Error('Question paper not found');
+      }
+      const parsed = questionPaperService.parsePaper(paper);
+      set({ currentQuestionPaper: parsed, loading: false });
+    } catch (error) {
+      console.error('Failed to load question paper:', error);
+      set({ error: (error as Error).message, loading: false });
+    }
+  },
+
+  generateQuestionPaper: async (params: GenerateQuestionPaperParams) => {
+    set({ generating: true, error: null, pendingQuestionPaper: null });
+    try {
+      const output = await questionPaperService.generate(params);
+      set({
+        pendingQuestionPaper: output,
+        pendingQuestionPaperParams: params,
+        generating: false,
+      });
+    } catch (error) {
+      console.error('Failed to generate question paper:', error);
+      set({ error: (error as Error).message, generating: false });
+      throw error;
+    }
+  },
+
+  savePendingQuestionPaper: async () => {
+    const { pendingQuestionPaper, pendingQuestionPaperParams } = get();
+    if (!pendingQuestionPaper || !pendingQuestionPaperParams) {
+      throw new Error('No pending question paper to save');
+    }
+
+    set({ loading: true, error: null });
+    try {
+      await initializeDb();
+      const saved = await questionPaperService.saveGenerated(
+        pendingQuestionPaperParams,
+        pendingQuestionPaper
+      );
+      set((state) => ({
+        questionPapers: [saved, ...state.questionPapers],
+        pendingQuestionPaper: null,
+        pendingQuestionPaperParams: null,
+        loading: false,
+      }));
+      return saved;
+    } catch (error) {
+      console.error('Failed to save question paper:', error);
+      set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+
+  updateQuestionPaper: async (id: string, data: Partial<QuestionPaper>) => {
+    set({ loading: true, error: null });
+    try {
+      await initializeDb();
+      const updated = await questionPaperService.update(id, data);
+      const parsed = questionPaperService.parsePaper(updated);
+      set((state) => ({
+        questionPapers: state.questionPapers.map((p) =>
+          p.id === id ? updated : p
+        ),
+        currentQuestionPaper:
+          state.currentQuestionPaper?.id === id
+            ? parsed
+            : state.currentQuestionPaper,
+        loading: false,
+      }));
+      return updated;
+    } catch (error) {
+      console.error('Failed to update question paper:', error);
+      set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+
+  deleteQuestionPaper: async (id: string) => {
+    set({ loading: true, error: null });
+    try {
+      await initializeDb();
+      await questionPaperService.delete(id);
+      set((state) => ({
+        questionPapers: state.questionPapers.filter((p) => p.id !== id),
+        currentQuestionPaper:
+          state.currentQuestionPaper?.id === id
+            ? null
+            : state.currentQuestionPaper,
+        loading: false,
+      }));
+    } catch (error) {
+      console.error('Failed to delete question paper:', error);
+      set({ error: (error as Error).message, loading: false });
+      throw error;
+    }
+  },
+
+  // Shared actions
   clearPending: () => {
-    set({ pendingLessonPlan: null, pendingParams: null });
+    set({
+      pendingLessonPlan: null,
+      pendingLessonPlanParams: null,
+      pendingQuestionPaper: null,
+      pendingQuestionPaperParams: null,
+    });
   },
 
   clearError: () => {
