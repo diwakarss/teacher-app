@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BookOpen, Plus, ChevronRight, Users, FileText } from 'lucide-react';
+import { BookOpen, Plus, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useClassStore } from '@/stores/class-store';
 import { ClassFormDialog } from '@/components/classes/class-form-dialog';
+import { ClassCardSkeleton } from '@/components/ui/loading-skeleton';
 import { initializeDb } from '@/lib/db/database';
 
 export default function ClassesPage() {
@@ -23,8 +24,15 @@ export default function ClassesPage() {
 
   if (!dbReady || loading) {
     return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="p-4">
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">Classes</h1>
+        </div>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <ClassCardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     );
   }

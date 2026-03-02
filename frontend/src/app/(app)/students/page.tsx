@@ -10,6 +10,7 @@ import { useStudentStore, type Student } from '@/stores/student-store';
 import { useClassStore } from '@/stores/class-store';
 import { StudentCard } from '@/components/students/student-card';
 import { StudentFormDialog } from '@/components/students/student-form-dialog';
+import { StudentCardSkeleton } from '@/components/ui/loading-skeleton';
 
 export default function StudentsPage() {
   const { activeClassId } = useAppStore();
@@ -103,8 +104,10 @@ export default function StudentsPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <StudentCardSkeleton key={i} />
+          ))}
         </div>
       ) : filteredStudents.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
