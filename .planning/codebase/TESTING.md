@@ -1,127 +1,275 @@
-# Testing Strategy — Teacher Assistant PWA
+# Testing Patterns
 
-## Overview
+**Analysis Date:** 2026-03-02
 
-Multi-layer testing strategy with focus on offline functionality and data integrity.
+## Test Framework
 
-## Test Stack
+**Runner:**
+- Vitest 4.0.18
+- Config: `vitest.config.ts`
 
-| Layer | Tool | Purpose |
-|-------|------|---------|
-| Unit | Vitest | Functions, hooks, components |
-| Integration | Vitest + Testing Library | Component interactions |
-| E2E | Playwright | User workflows, offline testing |
+**Assertion Library:**
+- Vitest built-in (`expect`)
+- `@testing-library/jest-dom` matchers (toBeInTheDocument, etc.)
 
-## Test Categories
+**Run Commands:**
+```bash
+pnpm test              # Run in watch mode
+pnpm test:ci           # Run once (CI mode)
+pnpm test:coverage     # Run with v8 coverage
+pnpm test:e2e          # Playwright (no config yet)
+```
 
-### Unit Tests
+## Test File Organization
 
-Focus areas:
-- Grade calculation (IGCSE boundaries)
-- Feedback template generation
-- Data validation
-- Utility functions
+**Location:** Co-located with source files
 
+**Naming:** `*.test.ts` or `*.test.tsx`
+
+**Structure:**
+```
+src/
+├── lib/
+│   ├── utils.ts
+│   └── utils.test.ts      # Co-located test
+├── services/
+│   └── marks-service.ts   # No tests yet
+└── test/
+    ├── setup.ts           # Vitest setup
+    └── test-utils.tsx     # Custom render
+```
+
+## Test Structure
+
+**Suite Organization:**
 ```typescript
-// lib/utils/__tests__/gradeCalculator.test.ts
-describe('calculateIGCSEGrade', () => {
-  test.each([
-    [100, 'A*'],
-    [90, 'A*'],
-    [89, 'A'],
-    [80, 'A'],
-    [70, 'B'],
-    [60, 'C'],
-    [50, 'D'],
-    [40, 'E'],
-    [30, 'F'],
-    [20, 'G'],
-    [19, 'U'],
-    [0, 'U'],
-  ])('returns %s for %d%%', (percentage, grade) => {
-    expect(calculateIGCSEGrade(percentage)).toBe(grade);
+import { describe, it, expect } from 'vitest';
+import { cn } from './utils';
+
+describe('cn utility', () => {
+  it('merges class names correctly', () => {
+    expect(cn('foo', 'bar')).toBe('foo bar');
+  });
+
+  it('handles conditional classes', () => {
+    expect(cn('foo', false && 'bar', 'baz')).toBe('foo baz');
+  });
+
+  it('merges tailwind classes correctly', () => {
+    expect(cn('px-4 py-2', 'px-6')).toBe('py-2 px-6');
   });
 });
 ```
 
-### Component Tests
+**Patterns:**
+- `describe()` for grouping related tests
+- `it()` or `test()` for individual cases
+- Setup: In `src/test/setup.ts`
+- Teardown: `afterEach(() => cleanup())` in setup
 
-Focus areas:
-- Form validation
-- User interactions
-- State updates
-- Error handling
+## Test Setup
+
+**Location:** `src/test/setup.ts`
 
 ```typescript
-// components/__tests__/StudentForm.test.tsx
-describe('StudentForm', () => {
-  it('validates required fields', async () => {
-    render(<StudentForm onSubmit={mockSubmit} />);
-    await userEvent.click(screen.getByRole('button', { name: /save/i }));
-    expect(screen.getByText(/name is required/i)).toBeInTheDocument();
-  });
+import '@testing-library/jest-dom/vitest';
+import { afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
+
+// Cleanup after each test
+afterEach(() => {
+  cleanup();
+});
+
+// Mock window.matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    // ... full mock
+  }),
+});
+
+// Mock navigator.onLine
+Object.defineProperty(navigator, 'onLine', {
+  writable: true,
+  value: true,
 });
 ```
 
-### E2E Tests
+## Mocking
 
-Focus areas:
-- Complete user workflows
-- Offline functionality
-- PWA installation
-- Data persistence
+**Framework:** Vitest built-in (`vi.mock`, `vi.fn`)
 
+**Current Mocks (in setup.ts):**
+- `window.matchMedia` - For responsive components
+- `navigator.onLine` - For offline detection
+
+**Patterns:**
 ```typescript
-// tests/e2e/marks-entry.spec.ts
-test('enter marks for class offline', async ({ page }) => {
-  // Go offline
-  await page.context().setOffline(true);
+// Mock a module
+vi.mock('@/lib/db/database', () => ({
+  getDb: vi.fn(),
+  initializeDb: vi.fn(),
+  persistDb: vi.fn(),
+}));
 
-  // Navigate to marks entry
-  await page.goto('/marks');
-
-  // Enter marks
-  await page.fill('[data-testid="student-1-marks"]', '85');
-  await page.click('button:has-text("Save")');
-
-  // Verify saved
-  await expect(page.locator('[data-testid="save-success"]')).toBeVisible();
-});
+// Mock a function
+const mockSubmit = vi.fn();
 ```
 
-## Coverage Targets
+**What to Mock:**
+- Browser APIs (matchMedia, IndexedDB, clipboard)
+- Database operations (sql.js)
+- External API calls (Claude)
 
-| Category | Target | Rationale |
-|----------|--------|-----------|
-| Grade calculation | 100% | Critical business logic |
-| Data services | 90% | Core functionality |
-| Components | 80% | UI logic |
-| E2E workflows | 5 critical paths | User journeys |
+**What NOT to Mock:**
+- Pure functions (calculateIGCSEGrade, cn)
+- React components (use Testing Library render)
 
-## Critical Test Paths
+## Custom Render
 
-1. **Create class → Add students → Enter marks → View grades**
-2. **Generate feedback for student → Copy to clipboard**
-3. **Work offline → Reconnect → Verify data persisted**
-4. **Install PWA → Launch from home screen**
-5. **Bulk student import → Verify all added**
-
-## Test Data
-
-Use factories for consistent test data:
+**Location:** `src/test/test-utils.tsx`
 
 ```typescript
-// tests/factories/student.ts
+import { ReactElement } from 'react';
+import { render, RenderOptions } from '@testing-library/react';
+
+function AllProviders({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
+function customRender(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
+  return render(ui, { wrapper: AllProviders, ...options });
+}
+
+export * from '@testing-library/react';
+export { customRender as render };
+```
+
+**Usage:**
+```typescript
+import { render, screen } from '@/test/test-utils';
+```
+
+## Fixtures and Factories
+
+**Test Data:** Not yet implemented
+
+**Recommended Pattern:**
+```typescript
+// test/factories/student.ts
 export const createStudent = (overrides?: Partial<Student>): Student => ({
   id: crypto.randomUUID(),
   name: 'Test Student',
   rollNumber: '001',
   classId: 'class-1',
-  createdAt: new Date(),
-  updatedAt: new Date(),
+  parentName: null,
+  parentPhone: null,
+  parentEmail: null,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
   ...overrides,
 });
 ```
 
+## Coverage
+
+**Requirements:** None enforced currently
+
+**Configuration:**
+```typescript
+// vitest.config.ts
+coverage: {
+  provider: 'v8',
+  reporter: ['text', 'json', 'html'],
+  include: ['src/**/*.{ts,tsx}'],
+  exclude: ['src/test/**', 'src/**/*.d.ts', 'src/types/**'],
+}
+```
+
+**View Coverage:**
+```bash
+pnpm test:coverage
+# Opens HTML report in coverage/index.html
+```
+
+## Test Types
+
+**Unit Tests:**
+- Scope: Pure functions, utilities
+- Location: Co-located `*.test.ts`
+- Current: `src/lib/utils.test.ts` only
+
+**Integration Tests:**
+- Scope: Components with state
+- Framework: Testing Library React
+- Current: None implemented
+
+**E2E Tests:**
+- Framework: Playwright 1.58.2
+- Config: Not created yet
+- Location: Would be `tests/e2e/`
+
+## Common Patterns
+
+**Testing Pure Functions:**
+```typescript
+describe('calculateIGCSEGrade', () => {
+  it('returns A* for 90%+', () => {
+    expect(calculateIGCSEGrade(90, 100)).toBe('A*');
+    expect(calculateIGCSEGrade(100, 100)).toBe('A*');
+  });
+
+  it('returns U for below 20%', () => {
+    expect(calculateIGCSEGrade(19, 100)).toBe('U');
+    expect(calculateIGCSEGrade(0, 100)).toBe('U');
+  });
+});
+```
+
+**Testing Components:**
+```typescript
+import { render, screen } from '@/test/test-utils';
+import { Button } from '@/components/ui/button';
+
+describe('Button', () => {
+  it('renders with children', () => {
+    render(<Button>Click me</Button>);
+    expect(screen.getByRole('button', { name: /click me/i })).toBeInTheDocument();
+  });
+});
+```
+
+## Test Gaps (Current State)
+
+**Not Tested:**
+- Services (class, student, assessment, marks, feedback)
+- Stores (all 6 stores)
+- Components (all feature components)
+- Database operations
+- AI integration
+
+**Only Tested:**
+- `cn()` utility function (3 tests)
+
+## Recommended Testing Priorities
+
+1. **High Priority:**
+   - `calculateIGCSEGrade()` - Critical business logic
+   - `calculatePerformanceLevel()` - Feedback classification
+   - Services CRUD operations (mock db)
+
+2. **Medium Priority:**
+   - Store loading/error states
+   - Form validation in dialogs
+   - Marks entry grid
+
+3. **Lower Priority:**
+   - UI components (shadcn/ui mostly pre-tested)
+   - E2E workflows
+
 ---
-*Testing strategy for Phase 1 MVP*
+
+*Testing analysis: 2026-03-02*

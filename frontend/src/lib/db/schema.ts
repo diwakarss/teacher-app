@@ -77,6 +77,21 @@ export const feedback = sqliteTable('feedback', {
   createdAt: text('created_at').notNull(),
 });
 
+export const chapters = sqliteTable('chapters', {
+  id: text('id').primaryKey(),
+  subjectId: text('subject_id')
+    .notNull()
+    .references(() => subjects.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  chapterNumber: integer('chapter_number').notNull(),
+  content: text('content').notNull(),
+  pageCount: integer('page_count').default(1),
+  sourceType: text('source_type').notNull(), // 'pdf' | 'image'
+  difficulty: text('difficulty'), // 'easy' | 'medium' | 'hard'
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
 // Type exports for use in services
 export type Class = typeof classes.$inferSelect;
 export type NewClass = typeof classes.$inferInsert;
@@ -95,3 +110,6 @@ export type NewMark = typeof marks.$inferInsert;
 
 export type Feedback = typeof feedback.$inferSelect;
 export type NewFeedback = typeof feedback.$inferInsert;
+
+export type Chapter = typeof chapters.$inferSelect;
+export type NewChapter = typeof chapters.$inferInsert;

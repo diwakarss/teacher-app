@@ -1,0 +1,22 @@
+{
+  "rounds": [],
+  "created_at": "2026-03-02T16:45:17Z",
+  "version": "v001",
+  "phase_dir": "/Users/b2sell/claude-projects/projects/teacher-app/.planning/phases/02-content-upload-ocr",
+  "status": "ready_for_review",
+  "inputs": {
+    "required": [
+      "RESEARCH-BRIEF.md",
+      "RESEARCH.md",
+      "ARCHITECTURE.md",
+      "PRD.md",
+      "RESEARCH-CHECK.md"
+    ],
+    "optional": [
+      "ARCHITECTURE.mmd",
+      "ARCHITECTURE.svg"
+    ],
+    "research_check_verdict": "PASS"
+  },
+  "updated_at": "2026-03-02T16:45:17Z"
+}

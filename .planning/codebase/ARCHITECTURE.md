@@ -1,106 +1,217 @@
-# Architecture — Teacher Assistant PWA
+# Architecture
 
-## Overview
+**Analysis Date:** 2026-03-02
 
-Offline-first Progressive Web App using Next.js 14 with local SQLite database. All data stored on-device; AI features require network.
+## Pattern Overview
 
-## Architecture Pattern
+**Overall:** Offline-first PWA with layered architecture
 
-**Local-First with Optional Cloud Enhancement**
+**Key Characteristics:**
+- Local-first data with SQLite in browser (sql.js + IndexedDB)
+- Client-side state management with Zustand
+- Service layer for database operations
+- Optional AI enhancement via Claude API
+- Next.js App Router with route groups
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      Browser                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │
-│  │   Next.js   │  │   Zustand   │  │    sql.js       │ │
-│  │   App       │──│   Store     │──│   (SQLite)      │ │
-│  │   Router    │  │             │  │                 │ │
-│  └─────────────┘  └─────────────┘  └────────┬────────┘ │
-│         │                                    │          │
-│         │              ┌─────────────────────┘          │
-│         │              ▼                                │
-│  ┌──────┴──────┐  ┌─────────────┐                      │
-│  │   Service   │  │  IndexedDB  │                      │
-│  │   Worker    │  │  (persist)  │                      │
-│  └─────────────┘  └─────────────┘                      │
-└─────────────────────────────────────────────────────────┘
-         │ (online only)
-         ▼
-┌─────────────────┐
-│   Claude API    │
-│   (feedback)    │
-└─────────────────┘
-```
+## Layers
 
-## Directory Structure
+### Presentation Layer
+- **Purpose:** UI rendering and user interaction
+- **Location:** `src/app/`, `src/components/`
+- **Contains:** Pages (App Router), React components, UI primitives
+- **Depends on:** Stores, services (indirectly)
+- **Used by:** End users via browser
 
-```
-teacher-app/
-├── app/                    # Next.js App Router
-│   ├── (app)/             # Main app routes (authenticated context)
-│   │   ├── classes/       # Class management
-│   │   ├── students/      # Student management
-│   │   ├── marks/         # Marks entry
-│   │   └── feedback/      # Feedback generation
-│   ├── layout.tsx         # Root layout
-│   └── page.tsx           # Landing/dashboard
-├── components/
-│   ├── ui/                # shadcn/ui components
-│   ├── forms/             # Form components
-│   └── layout/            # Layout components
-├── lib/
-│   ├── db/                # Database layer
-│   │   ├── schema.ts      # Drizzle schema
-│   │   ├── client.ts      # sql.js client
-│   │   └── migrations/    # Schema migrations
-│   ├── store/             # Zustand stores
-│   ├── hooks/             # Custom React hooks
-│   └── utils/             # Utility functions
-├── services/
-│   ├── class.ts           # Class CRUD operations
-│   ├── student.ts         # Student CRUD operations
-│   ├── assessment.ts      # Assessment operations
-│   ├── marks.ts           # Marks operations
-│   └── feedback.ts        # Feedback generation
-├── types/                 # TypeScript types
-├── public/
-│   └── manifest.json      # PWA manifest
-└── next.config.js         # Next.js config with PWA
-```
+### State Layer (Zustand Stores)
+- **Purpose:** Global client state, async operation management
+- **Location:** `src/stores/`
+- **Contains:** 6 stores (app, class, student, assessment, marks, feedback)
+- **Depends on:** Services, database initialization
+- **Used by:** Presentation layer via hooks
+
+### Service Layer
+- **Purpose:** Business logic and database operations
+- **Location:** `src/services/`
+- **Contains:** 6 services matching data entities
+- **Depends on:** Database layer
+- **Used by:** Stores
+
+### Database Layer
+- **Purpose:** SQLite operations and persistence
+- **Location:** `src/lib/db/`
+- **Contains:** `database.ts` (sql.js), `persist.ts` (IndexedDB), `schema.ts` (Drizzle types), `drizzle.ts` (unused ORM wrapper)
+- **Depends on:** sql.js, IndexedDB
+- **Used by:** Services
 
 ## Data Flow
 
-### Offline Operations (Class/Student/Marks CRUD)
+### CRUD Operations (Offline-capable)
 
 ```
-User Action → React Component → Zustand Store → Service Layer → sql.js → IndexedDB
-                                     ↑                              │
-                                     └──────────────────────────────┘
-                                           (read back to store)
+User Action
+    ↓
+React Component (page.tsx)
+    ↓
+Zustand Store (useXxxStore)
+    ↓ calls
+Service (xxxService)
+    ↓ executes SQL via
+sql.js Database (getDb())
+    ↓ persists to
+IndexedDB (persistDb())
+    ↓ returns to
+Store (updates state)
+    ↓ re-renders
+Component (React reactivity)
 ```
 
-### Online Operations (AI Feedback)
+### AI Feedback Generation (Online)
 
 ```
-User Action → React Component → Service Layer → Claude API → Response
-                                     │                          │
-                                     └──────────────────────────┘
-                                        (fallback to templates if offline)
+User clicks "Generate Feedback"
+    ↓
+feedbackStore.generateBulkFeedback()
+    ↓ checks useAI flag
+feedbackService.generateFeedbackWithAI() OR generateFeedbackFromTemplate()
+    ↓ if AI
+fetch() → Claude API
+    ↓ if fails
+fallback to template
+    ↓
+feedbackService.create() → SQLite → IndexedDB
+    ↓
+Store updates → Component re-renders
 ```
 
-## Key Design Decisions
+### State Management Pattern
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Database | sql.js (WASM) | True offline, no server needed |
-| State | Zustand | Simple, performant, good DX |
-| ORM | Drizzle | Type-safe, SQL-native, lightweight |
-| UI | shadcn/ui | Accessible, customizable, Tailwind-native |
-| Feedback | Hybrid | Templates offline, Claude online |
+```typescript
+// Pattern: Store wraps service, manages loading/error states
+const useXxxStore = create<XxxState>((set, get) => ({
+  items: [],
+  loading: false,
+  error: null,
+
+  loadItems: async () => {
+    set({ loading: true, error: null });
+    try {
+      await initializeDb();
+      const items = await xxxService.getAll();
+      set({ items, loading: false });
+    } catch (error) {
+      set({ error: error.message, loading: false });
+    }
+  },
+}));
+```
+
+## Key Abstractions
+
+### Database Singleton
+- **Purpose:** Single sql.js instance throughout app lifecycle
+- **Location:** `src/lib/db/database.ts`
+- **Pattern:** Promise-based lazy initialization
+
+```typescript
+let dbInstance: Database | null = null;
+let dbPromise: Promise<Database> | null = null;
+
+export async function getDb(): Promise<Database> {
+  if (dbInstance) return dbInstance;
+  if (dbPromise) return dbPromise;
+  dbPromise = initDatabase();
+  dbInstance = await dbPromise;
+  return dbInstance;
+}
+```
+
+### Entity Types (Drizzle Schema)
+- **Purpose:** Type-safe entity definitions
+- **Location:** `src/lib/db/schema.ts`
+- **Pattern:** Drizzle schema exports inferred types
+
+```typescript
+export const students = sqliteTable('students', { ... });
+export type Student = typeof students.$inferSelect;
+export type NewStudent = typeof students.$inferInsert;
+```
+
+### Grade Calculation
+- **Purpose:** IGCSE grade boundaries
+- **Location:** `src/services/marks-service.ts`
+- **Pattern:** Pure function, no network required
+
+## Entry Points
+
+### Root Layout
+- **Location:** `src/app/layout.tsx`
+- **Triggers:** Every page load
+- **Responsibilities:** HTML structure, fonts, Toaster component
+
+### App Layout
+- **Location:** `src/app/(app)/layout.tsx`
+- **Triggers:** All app routes within `(app)` group
+- **Responsibilities:** Wraps with AppShell (header, nav, offline indicator)
+
+### Database Initialization
+- **Location:** `src/lib/db/database.ts` - `initializeDb()`
+- **Triggers:** First database operation (via stores)
+- **Responsibilities:** Load WASM, restore from IndexedDB, run migrations
+
+## Error Handling
+
+**Strategy:** Try-catch in stores with error state
+
+**Patterns:**
+- Stores set `error: string | null` state on failures
+- Components can display `ErrorDisplay` component
+- `ErrorBoundary` class component for uncaught errors
+- Console logging for debugging
+
+```typescript
+// Store pattern
+try {
+  await someOperation();
+} catch (error) {
+  console.error('Failed to X:', error);
+  set({ error: (error as Error).message, loading: false });
+}
+```
+
+## Cross-Cutting Concerns
+
+**Logging:** Console only (`console.error`, `console.warn`)
+
+**Validation:** Basic client-side in forms, SQL constraints in database
+
+**Authentication:** None - fully client-side app
+
+**Offline Support:**
+- sql.js + IndexedDB for data persistence
+- Service worker via next-pwa (disabled in dev)
+- `OfflineIndicator` component shows online/offline status
+- AI features fallback to templates when offline
+
+## Route Structure
+
+```
+src/app/
+├── layout.tsx              # Root layout (fonts, toaster)
+├── globals.css             # Tailwind imports
+└── (app)/                  # App route group
+    ├── layout.tsx          # App shell wrapper
+    ├── page.tsx            # Dashboard
+    ├── classes/
+    │   ├── page.tsx        # Class list
+    │   └── [id]/page.tsx   # Class detail (subjects)
+    ├── students/page.tsx   # Student list
+    ├── marks/page.tsx      # Marks entry
+    └── feedback/page.tsx   # Feedback generation
+```
 
 ## IGCSE Grade Boundaries
 
-Implemented as pure function, no network required:
+Implemented in `src/services/marks-service.ts`:
 
 | Grade | Percentage Range |
 |-------|------------------|
@@ -115,4 +226,5 @@ Implemented as pure function, no network required:
 | U | 0-19 |
 
 ---
-*Greenfield architecture design*
+
+*Architecture analysis: 2026-03-02*

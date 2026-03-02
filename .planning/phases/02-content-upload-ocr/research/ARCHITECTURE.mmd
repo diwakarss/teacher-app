@@ -1,0 +1,68 @@
+flowchart TD
+    subgraph UI["UI Layer"]
+        ContentPage["Content Page<br/>/content"]
+        UploadDialog["Upload Dialog<br/>PDF / Camera"]
+        ChapterList["Chapter List"]
+        ContentViewer["Content Viewer"]
+    end
+
+    subgraph Processing["Processing Layer (Client-Side)"]
+        FileHandler["File Handler<br/>Max 50MB"]
+        PDFExtractor["PDF.js<br/>Text Layer Extract"]
+        TesseractOCR["Tesseract.js<br/>Image OCR<br/>(lazy load)"]
+        ChapterDetector["Chapter Detector<br/>Regex Heuristics"]
+    end
+
+    subgraph State["State Layer"]
+        ContentStore["contentStore<br/>Zustand"]
+    end
+
+    subgraph Service["Service Layer"]
+        ChapterService["chapterService<br/>CRUD"]
+    end
+
+    subgraph Data["Data Layer"]
+        SQLite["sql.js<br/>SQLite"]
+        IndexedDB["IndexedDB<br/>Persistence"]
+    end
+
+    subgraph Schema["New Table"]
+        Chapters["chapters<br/>id, subjectId, name,<br/>chapterNumber, content,<br/>pageCount"]
+    end
+
+    %% UI Flow
+    ContentPage --> UploadDialog
+    ContentPage --> ChapterList
+    ChapterList --> ContentViewer
+
+    %% Upload Flow - PDF path (primary)
+    UploadDialog -->|"PDF (Lens scan)"| FileHandler
+    FileHandler -->|"Has text layer"| PDFExtractor
+    PDFExtractor --> ChapterDetector
+
+    %% Upload Flow - Image path (fallback)
+    UploadDialog -->|"Photo"| FileHandler
+    FileHandler -->|"Image file"| TesseractOCR
+    TesseractOCR --> ChapterDetector
+
+    %% Data Flow
+    ChapterDetector -->|"Structured text"| ContentStore
+    ContentStore --> ChapterService
+    ChapterService --> SQLite
+    SQLite --> IndexedDB
+    SQLite --> Chapters
+
+    %% Styling
+    classDef uiNode fill:#818cf8,stroke:#4f46e5,color:#fff
+    classDef processNode fill:#34d399,stroke:#059669,color:#fff
+    classDef storeNode fill:#fbbf24,stroke:#d97706,color:#000
+    classDef serviceNode fill:#f472b6,stroke:#db2777,color:#fff
+    classDef dataNode fill:#60a5fa,stroke:#2563eb,color:#fff
+    classDef schemaNode fill:#a78bfa,stroke:#7c3aed,color:#fff
+
+    class ContentPage,UploadDialog,ChapterList,ContentViewer uiNode
+    class FileHandler,PDFExtractor,TesseractOCR,ChapterDetector processNode
+    class ContentStore storeNode
+    class ChapterService serviceNode
+    class SQLite,IndexedDB dataNode
+    class Chapters schemaNode

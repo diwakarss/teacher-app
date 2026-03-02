@@ -114,6 +114,20 @@ export async function runMigrations(db: Database): Promise<void> {
       FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS chapters (
+      id TEXT PRIMARY KEY,
+      subject_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      chapter_number INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      page_count INTEGER DEFAULT 1,
+      source_type TEXT NOT NULL CHECK (source_type IN ('pdf', 'image')),
+      difficulty TEXT CHECK (difficulty IN ('easy', 'medium', 'hard')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_subjects_class_id ON subjects(class_id);
     CREATE INDEX IF NOT EXISTS idx_students_class_id ON students(class_id);
     CREATE INDEX IF NOT EXISTS idx_assessments_class_id ON assessments(class_id);
@@ -122,6 +136,7 @@ export async function runMigrations(db: Database): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_marks_assessment_id ON marks(assessment_id);
     CREATE INDEX IF NOT EXISTS idx_feedback_student_id ON feedback(student_id);
     CREATE INDEX IF NOT EXISTS idx_feedback_assessment_id ON feedback(assessment_id);
+    CREATE INDEX IF NOT EXISTS idx_chapters_subject_id ON chapters(subject_id);
   `);
 
   await persistDb();
