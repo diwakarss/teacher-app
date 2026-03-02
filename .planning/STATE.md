@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-**Phase 2: Content Upload & OCR**
+**Phase 3: Generation (Lesson Plans, Question Papers)**
 
 ## Status
 
-`executing` — Phase 1 MVP complete, Phase 2 in progress
+`complete` — Phase 3 complete
 
 ## Phase 1 MVP — COMPLETE ✓
 
@@ -33,6 +33,16 @@
 | Wave 4: Tesseract.js OCR | ✓ Complete | ocr-processor.ts, image upload, OCR fallback |
 | Wave 5: Content Management | ✓ Complete | /content/[id] detail page, content-viewer.tsx, 21 unit tests |
 
+## Phase 3 Progress — COMPLETE ✓
+
+| Wave | Status | Notes |
+|------|--------|-------|
+| Wave 1: DB & API | ✓ Complete | lesson_plans/question_papers tables, Bedrock Converse API |
+| Wave 2: Lesson Plan | ✓ Complete | lesson-plan-service, generation-store, form + preview |
+| Wave 3: Question Paper | ✓ Complete | question-paper-service, multi-chapter, templates, hub page |
+| Wave 4: Export & Polish | ✓ Complete | PDF export, recent items list, offline handling |
+| Wave 5: Tests | ✓ Complete | 58 unit tests passing |
+
 ## Recent Activity
 
 - 2026-03-02: Project initialized
@@ -48,6 +58,11 @@
 - 2026-03-02: **Phase 1 MVP COMPLETE**
 - 2026-03-02: Phase 2 Content Upload started
 - 2026-03-02: **Phase 2 Content Upload COMPLETE**
+- 2026-03-03: Phase 3 Generation started
+- 2026-03-03: Wave 1-3: Lesson plans + question papers with AI
+- 2026-03-03: Wave 4: PDF export, recent items, offline handling
+- 2026-03-03: Wave 5: Unit tests (58 passing)
+- 2026-03-03: **Phase 3 Generation COMPLETE**
 
 ## Blockers
 
@@ -57,8 +72,8 @@ None
 
 1. ~~Phase 1: MVP~~ ✓ Complete
 2. ~~Phase 2: Content Upload & OCR~~ ✓ Complete
-3. **Phase 3: Generation (Lesson plans, Question papers)** — Next
-4. Phase 4: Polish (Document formatter, Analytics, Cloud sync)
+3. ~~Phase 3: Generation (Lesson plans, Question papers)~~ ✓ Complete
+4. **Phase 4: Polish (Document formatter, Analytics, Cloud sync)** — Next
 
 ---
-*Last updated: 2026-03-02*
+*Last updated: 2026-03-03*
