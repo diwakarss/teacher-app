@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, ClipboardList, MessageSquare, BookOpen, FileText } from 'lucide-react';
+import { Home, Users, ClipboardList, BookOpen, FileText, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -10,7 +10,7 @@ const navItems = [
   { href: '/classes', label: 'Classes', icon: BookOpen },
   { href: '/students', label: 'Students', icon: Users },
   { href: '/marks', label: 'Marks', icon: ClipboardList },
-  { href: '/content', label: 'Content', icon: FileText },
+  { href: '/generate/lesson-plan', label: 'Generate', icon: Sparkles },
 ];
 
 export function BottomNav() {

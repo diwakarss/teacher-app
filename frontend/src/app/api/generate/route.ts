@@ -6,11 +6,27 @@ import {
 import { buildLessonPlanPrompt } from '@/lib/prompts/lesson-plan-prompt';
 import { buildQuestionPaperPrompt } from '@/lib/prompts/question-paper-prompt';
 
-const client = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-});
+// Support both API key (bearer token) and IAM credentials
+// API key: Set AWS_BEARER_TOKEN_BEDROCK env var
+// IAM: Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY env vars
+function createBedrockClient(): BedrockRuntimeClient {
+  const region = process.env.AWS_REGION || 'us-east-1';
 
-const MODEL_ID = 'anthropic.claude-3-haiku-20240307-v1:0';
+  // API key authentication (preferred, simpler)
+  if (process.env.AWS_BEARER_TOKEN_BEDROCK) {
+    return new BedrockRuntimeClient({
+      region,
+      token: { token: process.env.AWS_BEARER_TOKEN_BEDROCK },
+    });
+  }
+
+  // Fall back to IAM credentials (auto-resolved from env)
+  return new BedrockRuntimeClient({ region });
+}
+
+// Use inference profile ID (required for on-demand throughput)
+// Claude 3.5 Haiku is faster and more capable than Claude 3 Haiku
+const MODEL_ID = 'us.anthropic.claude-3-5-haiku-20241022-v1:0';
 
 export type GenerationType = 'lesson_plan' | 'question_paper';
 
@@ -54,17 +70,23 @@ export async function POST(request: NextRequest): Promise<NextResponse<GenerateR
   try {
     const body: GenerateRequest = await request.json();
 
-    // Validate AWS credentials are configured
-    if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+    // Validate credentials are configured (API key OR IAM)
+    const hasApiKey = !!process.env.AWS_BEARER_TOKEN_BEDROCK;
+    const hasIamCreds =
+      !!process.env.AWS_ACCESS_KEY_ID && !!process.env.AWS_SECRET_ACCESS_KEY;
+
+    if (!hasApiKey && !hasIamCreds) {
       return NextResponse.json(
         {
           success: false,
-          error: 'AWS credentials not configured. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.',
+          error:
+            'AWS credentials not configured. Set AWS_BEARER_TOKEN_BEDROCK (API key) or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (IAM).',
         },
         { status: 500 }
       );
     }
 
+    const client = createBedrockClient();
     let prompt: string;
 
     if (body.type === 'lesson_plan') {
