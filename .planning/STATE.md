@@ -2,39 +2,36 @@
 
 ## Current Phase
 
-**Phase 1: MVP**
+**Phase 2: Content Upload & OCR**
 
 ## Status
 
-`executing` — Wave 2 complete, Wave 3 pending
+`executing` — Phase 1 MVP complete, Phase 2 in progress
 
-## Progress
+## Phase 1 MVP — COMPLETE ✓
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| PWA Scaffold | Complete | Next.js 16, shadcn/ui, PWA manifest, service worker |
-| Database | Complete | sql.js + IndexedDB persistence, Drizzle schema |
-| Base Layout | Complete | Header, bottom nav, offline indicator, 5 routes |
-| State Management | Complete | Zustand stores with service integration |
-| Test Infrastructure | Complete | Vitest + Testing Library configured |
-| Class Management | Complete | Wave 2: CRUD, subjects, IGCSE templates |
-| Student Management | Pending | Wave 3 |
-| Marks Entry | Pending | Wave 4 |
-| Feedback Generation | Pending | Wave 5 |
+| PWA Scaffold | ✓ Complete | Next.js 16, shadcn/ui, PWA manifest, service worker |
+| Database | ✓ Complete | sql.js + IndexedDB persistence, Drizzle schema |
+| Base Layout | ✓ Complete | Header, bottom nav, offline indicator, 5 routes |
+| State Management | ✓ Complete | Zustand stores with service integration |
+| Test Infrastructure | ✓ Complete | Vitest + Testing Library configured |
+| Class Management | ✓ Complete | Wave 2: CRUD, subjects, IGCSE templates |
+| Student Management | ✓ Complete | Wave 3: CRUD, search, class linking |
+| Marks Entry | ✓ Complete | Wave 4: IGCSE grade calculation |
+| Feedback Generation | ✓ Complete | Wave 5: AI + templates |
+| Polish & Testing | ✓ Complete | Wave 6: Loading skeletons, error handling |
 
-## Wave 2 Verification
+## Phase 2 Progress
 
-| Check | Status |
-|-------|--------|
-| TypeScript clean | ✓ 0 errors |
-| Tests pass | ✓ 3/3 |
-| Build succeeds | ✓ |
-| classService | ✓ CRUD implemented |
-| subjectService | ✓ CRUD + bulk create |
-| ClassList page | ✓ With create dialog |
-| ClassDetail page | ✓ With subject management |
-| IGCSE templates | ✓ 20 subjects available |
-| Class switcher | ✓ Header auto-select |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| PDF Extractor | In Progress | pdf-extractor.ts created |
+| Chapter Detector | In Progress | chapter-detector.ts created |
+| Content Store | In Progress | content-store.ts created |
+| Content Pages | In Progress | /content routes created |
+| OCR Integration | Pending | Tesseract.js |
 
 ## Recent Activity
 
@@ -44,6 +41,12 @@
 - 2026-03-02: Plan v001 created and approved
 - 2026-03-02: Wave 1 execution complete (T1.1–T1.9)
 - 2026-03-02: Wave 2 execution complete (T2.1–T2.8)
+- 2026-03-02: Wave 3 execution complete (Student Management)
+- 2026-03-02: Wave 4 execution complete (Marks Entry)
+- 2026-03-02: Wave 5 execution complete (Feedback Generation)
+- 2026-03-02: Wave 6 execution complete (Polish & Testing)
+- 2026-03-02: **Phase 1 MVP COMPLETE**
+- 2026-03-02: Phase 2 Content Upload started
 
 ## Blockers
 
@@ -51,12 +54,10 @@ None
 
 ## Next Actions
 
-1. ~~Complete Wave 1: Foundation~~ ✓
-2. ~~Execute Wave 2: Class & Subject Management~~ ✓
-3. Execute Wave 3: Student Management
-4. Execute Wave 4: Marks Entry
-5. Execute Wave 5: Feedback Generation
-6. Execute Wave 6: Polish & Testing
+1. ~~Phase 1: MVP~~ ✓ Complete
+2. **Phase 2: Content Upload & OCR** — In Progress
+3. Phase 3: Generation (Lesson plans, Question papers)
+4. Phase 4: Polish (Document formatter, Analytics, Cloud sync)
 
 ---
 *Last updated: 2026-03-02*
