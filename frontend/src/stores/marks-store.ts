@@ -1,27 +1,13 @@
 import { create } from 'zustand';
+import {
+  marksService,
+  calculateIGCSEGrade,
+  type MarkWithStudent,
+} from '@/services/marks-service';
+import { initializeDb } from '@/lib/db/database';
+import type { Mark, Assessment } from '@/lib/db/schema';
 
-export interface Assessment {
-  id: string;
-  name: string;
-  type: 'unit' | 'monthly' | 'term' | 'quiz';
-  subjectId: string;
-  classId: string;
-  maxMarks: number;
-  date: string;
-  term: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Mark {
-  id: string;
-  studentId: string;
-  assessmentId: string;
-  marksObtained: number;
-  remarks?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+export type { Mark, MarkWithStudent };
 
 export interface ClassStats {
   average: number;
@@ -32,74 +18,127 @@ export interface ClassStats {
 }
 
 interface MarksState {
-  assessments: Assessment[];
-  marks: Mark[];
+  marks: MarkWithStudent[];
   loading: boolean;
   error: string | null;
-  loadAssessments: (classId: string) => Promise<void>;
+  currentAssessmentId: string | null;
   loadMarks: (assessmentId: string) => Promise<void>;
-  setMark: (studentId: string, assessmentId: string, value: number, remarks?: string) => Promise<void>;
-  loadStatistics: (assessmentId: string) => Promise<ClassStats | null>;
+  upsertMark: (
+    studentId: string,
+    assessmentId: string,
+    marksObtained: number,
+    remarks?: string
+  ) => Promise<Mark>;
+  bulkUpsert: (
+    assessmentId: string,
+    entries: { studentId: string; marksObtained: number; remarks?: string }[]
+  ) => Promise<void>;
+  deleteMark: (id: string) => Promise<void>;
+  calculateStats: (assessment: Assessment) => ClassStats | null;
 }
 
-export const useMarksStore = create<MarksState>((set) => ({
-  assessments: [],
+export const useMarksStore = create<MarksState>((set, get) => ({
   marks: [],
   loading: false,
   error: null,
-
-  loadAssessments: async (classId: string) => {
-    set({ loading: true, error: null });
-    try {
-      // TODO: Integrate with assessment-service in Wave 4
-      set({ assessments: [], loading: false });
-    } catch (error) {
-      set({ error: (error as Error).message, loading: false });
-    }
-  },
+  currentAssessmentId: null,
 
   loadMarks: async (assessmentId: string) => {
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, currentAssessmentId: assessmentId });
     try {
-      // TODO: Integrate with marks-service in Wave 4
-      set({ marks: [], loading: false });
+      await initializeDb();
+      const marks = await marksService.getByAssessment(assessmentId);
+      set({ marks, loading: false });
     } catch (error) {
+      console.error('Failed to load marks:', error);
       set({ error: (error as Error).message, loading: false });
     }
   },
 
-  setMark: async (studentId: string, assessmentId: string, value: number, remarks?: string) => {
-    set({ loading: true, error: null });
+  upsertMark: async (
+    studentId: string,
+    assessmentId: string,
+    marksObtained: number,
+    remarks?: string
+  ) => {
     try {
-      // TODO: Integrate with marks-service in Wave 4
-      const newMark: Mark = {
-        id: crypto.randomUUID(),
+      await initializeDb();
+      const mark = await marksService.upsert(
         studentId,
         assessmentId,
-        marksObtained: value,
-        remarks,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      set((state) => {
-        const existingIndex = state.marks.findIndex(
-          (m) => m.studentId === studentId && m.assessmentId === assessmentId
-        );
-        if (existingIndex >= 0) {
-          const updatedMarks = [...state.marks];
-          updatedMarks[existingIndex] = { ...updatedMarks[existingIndex], marksObtained: value, remarks };
-          return { marks: updatedMarks, loading: false };
-        }
-        return { marks: [...state.marks, newMark], loading: false };
-      });
+        marksObtained,
+        remarks
+      );
+
+      // Reload marks for current assessment if it matches
+      if (get().currentAssessmentId === assessmentId) {
+        const marks = await marksService.getByAssessment(assessmentId);
+        set({ marks });
+      }
+
+      return mark;
     } catch (error) {
+      console.error('Failed to upsert mark:', error);
+      set({ error: (error as Error).message });
+      throw error;
+    }
+  },
+
+  bulkUpsert: async (assessmentId, entries) => {
+    set({ loading: true, error: null });
+    try {
+      await initializeDb();
+      await marksService.bulkUpsert(assessmentId, entries);
+
+      // Reload marks for current assessment if it matches
+      if (get().currentAssessmentId === assessmentId) {
+        const marks = await marksService.getByAssessment(assessmentId);
+        set({ marks, loading: false });
+      } else {
+        set({ loading: false });
+      }
+    } catch (error) {
+      console.error('Failed to bulk upsert marks:', error);
       set({ error: (error as Error).message, loading: false });
       throw error;
     }
   },
 
-  loadStatistics: async (assessmentId: string) => {
-    // TODO: Integrate with marks-service in Wave 4
-    return null;
+  deleteMark: async (id: string) => {
+    try {
+      await initializeDb();
+      await marksService.delete(id);
+      set((state) => ({
+        marks: state.marks.filter((m) => m.id !== id),
+      }));
+    } catch (error) {
+      console.error('Failed to delete mark:', error);
+      set({ error: (error as Error).message });
+      throw error;
+    }
+  },
+
+  calculateStats: (assessment: Assessment) => {
+    const marks = get().marks;
+    if (marks.length === 0) return null;
+
+    const marksValues = marks.map((m) => m.marksObtained);
+    const average = marksValues.reduce((a, b) => a + b, 0) / marksValues.length;
+    const highest = Math.max(...marksValues);
+    const lowest = Math.min(...marksValues);
+
+    const gradeDistribution: Record<string, number> = {};
+    marks.forEach((m) => {
+      const grade = calculateIGCSEGrade(m.marksObtained, assessment.maxMarks);
+      gradeDistribution[grade] = (gradeDistribution[grade] || 0) + 1;
+    });
+
+    return {
+      average: Math.round(average * 10) / 10,
+      highest,
+      lowest,
+      totalStudents: marks.length,
+      gradeDistribution,
+    };
   },
 }));
