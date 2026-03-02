@@ -1,0 +1,46 @@
+{
+  "project": "teacher-assistant-pwa",
+  "type": "coding",
+  "created": "2026-03-02",
+  "currentPhase": 1,
+  "phases": [
+    {
+      "id": 1,
+      "name": "MVP",
+      "status": "research",
+      "features": ["pwa-scaffold", "class-management", "student-management", "marks-entry", "feedback-generation"]
+    },
+    {
+      "id": 2,
+      "name": "Content & Worksheets",
+      "status": "pending",
+      "features": ["content-upload", "ocr", "worksheet-generation"]
+    },
+    {
+      "id": 3,
+      "name": "Lesson Plans & Papers",
+      "status": "pending",
+      "features": ["lesson-plan-generation", "question-paper-generation"]
+    },
+    {
+      "id": 4,
+      "name": "Polish & Sync",
+      "status": "pending",
+      "features": ["document-formatter", "analytics", "cloud-sync"]
+    }
+  ],
+  "decisions": {
+    "multiTeacher": false,
+    "parentView": false,
+    "storePapers": true,
+    "schoolIntegration": false,
+    "curriculum": "IGCSE"
+  },
+  "techStack": {
+    "frontend": "next.js",
+    "database": "sqlite",
+    "ai": "claude-api",
+    "ocr": "tesseract.js",
+    "ui": "tailwind + shadcn"
+  }
+}

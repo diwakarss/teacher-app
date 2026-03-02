@@ -1,0 +1,47 @@
+flowchart TD
+    subgraph Browser["Browser (PWA)"]
+        subgraph UI["UI Layer"]
+            Pages["Next.js Pages<br/>Dashboard, Classes, Students, Marks, Feedback"]
+            Components["shadcn/ui Components<br/>Forms, Tables, Cards, Dialogs"]
+        end
+
+        subgraph State["State Layer"]
+            Zustand["Zustand Stores<br/>useClassStore, useStudentStore, useMarksStore"]
+        end
+
+        subgraph Data["Data Layer"]
+            Services["Services<br/>classService, studentService, marksService, feedbackService"]
+            Drizzle["Drizzle ORM<br/>Type-safe queries"]
+            SqlJs["sql.js<br/>SQLite WASM"]
+        end
+
+        subgraph Storage["Persistence"]
+            IndexedDB["IndexedDB<br/>Database file storage"]
+            SW["Service Worker<br/>Workbox caching"]
+        end
+    end
+
+    subgraph External["External (Online Only)"]
+        Claude["Claude API<br/>Enhanced feedback"]
+    end
+
+    Pages --> Components
+    Pages --> Zustand
+    Zustand --> Services
+    Services --> Drizzle
+    Drizzle --> SqlJs
+    SqlJs --> IndexedDB
+    Services -.->|"online"| Claude
+    SW --> Pages
+
+    classDef ui fill:#e1f5fe,stroke:#01579b
+    classDef state fill:#f3e5f5,stroke:#4a148c
+    classDef data fill:#e8f5e9,stroke:#1b5e20
+    classDef storage fill:#fff3e0,stroke:#e65100
+    classDef external fill:#fce4ec,stroke:#880e4f
+
+    class Pages,Components ui
+    class Zustand state
+    class Services,Drizzle,SqlJs data
+    class IndexedDB,SW storage
+    class Claude external

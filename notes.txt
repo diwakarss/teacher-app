@@ -1,0 +1,11 @@
+continuing conversation due to previous session crash. use the ui-ux-pro-max skill and redesign the ui and update the playground, lets plan the ui for all the remaining phases as well. ### Phase 2
+- [ ] Content upload (PDF, photos)
+- [ ] OCR for English text
+- [ ] Worksheet generation
+Phase 3
+- [ ] Lesson plan generation
+- [ ] Question paper generation
+Phase 4
+- [ ] Document formatter tool
+- [ ] Advanced analytics
+- [ ] Cloud sync & backup

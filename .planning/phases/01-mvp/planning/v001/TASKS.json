@@ -1,0 +1,116 @@
+{
+  "version": "v001",
+  "phase": 1,
+  "phaseName": "MVP",
+  "created": "2026-03-02",
+  "totalEstimateHours": 56,
+  "waves": [
+    {
+      "id": 1,
+      "name": "Foundation",
+      "estimateHours": 8,
+      "tasks": [
+        {"id": "1.1", "name": "Initialize Next.js 14 project with TypeScript", "estimate": "30m", "deps": []},
+        {"id": "1.2", "name": "Configure PWA (next-pwa, manifest, icons)", "estimate": "1h", "deps": ["1.1"]},
+        {"id": "1.3", "name": "Set up Tailwind CSS + shadcn/ui", "estimate": "30m", "deps": ["1.1"]},
+        {"id": "1.4", "name": "Configure sql.js with IndexedDB persistence", "estimate": "2h", "deps": ["1.1"]},
+        {"id": "1.5", "name": "Create Drizzle schema for all tables", "estimate": "1h", "deps": ["1.4"]},
+        {"id": "1.6", "name": "Implement database migrations system", "estimate": "1h", "deps": ["1.5"]},
+        {"id": "1.7", "name": "Set up Zustand stores skeleton", "estimate": "30m", "deps": ["1.1"]},
+        {"id": "1.8", "name": "Create base layout with navigation", "estimate": "1h", "deps": ["1.3"]}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Class & Subject Management",
+      "estimateHours": 7.5,
+      "tasks": [
+        {"id": "2.1", "name": "Create classService (CRUD operations)", "estimate": "1h", "deps": ["1.5", "1.7"]},
+        {"id": "2.2", "name": "Create subjectService (CRUD operations)", "estimate": "1h", "deps": ["1.5", "1.7"]},
+        {"id": "2.3", "name": "Build ClassList page", "estimate": "1h", "deps": ["1.8", "2.1"]},
+        {"id": "2.4", "name": "Build ClassForm component (create/edit)", "estimate": "1h", "deps": ["2.3"]},
+        {"id": "2.5", "name": "Build ClassDetail page with subjects", "estimate": "1.5h", "deps": ["2.1", "2.2"]},
+        {"id": "2.6", "name": "Build SubjectForm component", "estimate": "45m", "deps": ["2.5"]},
+        {"id": "2.7", "name": "Add IGCSE subject templates", "estimate": "30m", "deps": ["2.2"]},
+        {"id": "2.8", "name": "Implement class switcher in header", "estimate": "45m", "deps": ["2.3"]}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Student Management",
+      "estimateHours": 6.25,
+      "tasks": [
+        {"id": "3.1", "name": "Create studentService (CRUD operations)", "estimate": "1h", "deps": ["1.5", "1.7"]},
+        {"id": "3.2", "name": "Build StudentList page with search", "estimate": "1.5h", "deps": ["3.1", "1.8"]},
+        {"id": "3.3", "name": "Build StudentForm component (create/edit)", "estimate": "1h", "deps": ["3.2"]},
+        {"id": "3.4", "name": "Build StudentCard component", "estimate": "30m", "deps": ["3.2"]},
+        {"id": "3.5", "name": "Build StudentDetail page", "estimate": "1h", "deps": ["3.1"]},
+        {"id": "3.6", "name": "Implement student search (name/roll)", "estimate": "45m", "deps": ["3.2"]},
+        {"id": "3.7", "name": "Add delete student with confirmation", "estimate": "30m", "deps": ["3.2"]}
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Marks Entry & Grading",
+      "estimateHours": 9.5,
+      "tasks": [
+        {"id": "4.1", "name": "Create assessmentService (CRUD)", "estimate": "1h", "deps": ["1.5", "1.7"]},
+        {"id": "4.2", "name": "Create marksService (CRUD)", "estimate": "1h", "deps": ["1.5", "1.7"]},
+        {"id": "4.3", "name": "Implement IGCSE grade calculator", "estimate": "30m", "deps": []},
+        {"id": "4.4", "name": "Build AssessmentList page", "estimate": "1h", "deps": ["4.1", "1.8"]},
+        {"id": "4.5", "name": "Build AssessmentForm component", "estimate": "1h", "deps": ["4.4"]},
+        {"id": "4.6", "name": "Build MarksGrid component (bulk entry)", "estimate": "2h", "deps": ["4.2", "3.1"]},
+        {"id": "4.7", "name": "Implement keyboard navigation in grid", "estimate": "1h", "deps": ["4.6"]},
+        {"id": "4.8", "name": "Add auto-save on field blur", "estimate": "30m", "deps": ["4.6"]},
+        {"id": "4.9", "name": "Display grades next to marks", "estimate": "30m", "deps": ["4.3", "4.6"]},
+        {"id": "4.10", "name": "Build class statistics component", "estimate": "1h", "deps": ["4.2"]}
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Feedback Generation",
+      "estimateHours": 8.5,
+      "tasks": [
+        {"id": "5.1", "name": "Create feedback templates", "estimate": "1h", "deps": []},
+        {"id": "5.2", "name": "Build feedbackService (template-based)", "estimate": "1.5h", "deps": ["5.1", "4.2"]},
+        {"id": "5.3", "name": "Build FeedbackPanel page", "estimate": "1.5h", "deps": ["5.2", "1.8"]},
+        {"id": "5.4", "name": "Build FeedbackCard component", "estimate": "45m", "deps": ["5.3"]},
+        {"id": "5.5", "name": "Implement copy to clipboard", "estimate": "30m", "deps": ["5.4"]},
+        {"id": "5.6", "name": "Add SMS/WhatsApp format toggle", "estimate": "30m", "deps": ["5.3"]},
+        {"id": "5.7", "name": "Create API route for Claude enhancement", "estimate": "1h", "deps": ["5.2"]},
+        {"id": "5.8", "name": "Implement online/offline feedback toggle", "estimate": "45m", "deps": ["5.7"]},
+        {"id": "5.9", "name": "Add bulk feedback generation", "estimate": "1h", "deps": ["5.2"]}
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Polish & PWA",
+      "estimateHours": 8,
+      "tasks": [
+        {"id": "6.1", "name": "Implement offline indicator", "estimate": "30m", "deps": ["1.2"]},
+        {"id": "6.2", "name": "Configure service worker caching", "estimate": "1h", "deps": ["1.2"]},
+        {"id": "6.3", "name": "Add loading states and skeletons", "estimate": "1h", "deps": []},
+        {"id": "6.4", "name": "Implement error boundaries", "estimate": "30m", "deps": []},
+        {"id": "6.5", "name": "Add toast notifications", "estimate": "30m", "deps": []},
+        {"id": "6.6", "name": "Mobile responsive polish", "estimate": "2h", "deps": []},
+        {"id": "6.7", "name": "PWA audit and fixes", "estimate": "1h", "deps": ["6.2"]},
+        {"id": "6.8", "name": "Dashboard with quick stats", "estimate": "1.5h", "deps": ["2.1", "3.1", "4.2"]}
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Testing",
+      "estimateHours": 8.5,
+      "tasks": [
+        {"id": "7.1", "name": "Set up Vitest", "estimate": "30m", "deps": ["1.1"]},
+        {"id": "7.2", "name": "Unit tests for grade calculator", "estimate": "30m", "deps": ["4.3"]},
+        {"id": "7.3", "name": "Unit tests for services", "estimate": "2h", "deps": []},
+        {"id": "7.4", "name": "Component tests for forms", "estimate": "2h", "deps": []},
+        {"id": "7.5", "name": "Set up Playwright", "estimate": "30m", "deps": ["1.1"]},
+        {"id": "7.6", "name": "E2E: Create class → add students → enter marks", "estimate": "1.5h", "deps": []},
+        {"id": "7.7", "name": "E2E: Offline functionality", "estimate": "1h", "deps": ["6.2"]},
+        {"id": "7.8", "name": "E2E: PWA install flow", "estimate": "30m", "deps": ["6.7"]}
+      ]
+    }
+  ]
+}

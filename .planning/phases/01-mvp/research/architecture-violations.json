@@ -1,0 +1,7 @@
+{
+  "status": "skip",
+  "reason": "greenfield_project",
+  "violations": [],
+  "summary": "No existing code to analyze. Greenfield project.",
+  "scanned_at": "2026-03-02"
+}

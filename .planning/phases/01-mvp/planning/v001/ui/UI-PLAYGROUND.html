@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Assistant PWA - UI Preview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --surface-2: #252525;
+      --border: #333;
+      --text: #e5e5e5;
+      --text-muted: #888;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    .controls {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      overflow-y: auto;
+      max-height: 100vh;
+    }
+
+    .controls h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+
+    .control-group {
+      margin-bottom: 24px;
+    }
+
+    .control-group h3 {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .control {
+      margin-bottom: 12px;
+    }
+
+    .control label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .control input[type="range"] {
+      width: 100%;
+      accent-color: var(--primary);
+    }
+
+    .control select {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .control input[type="color"] {
+      width: 40px;
+      height: 32px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .preset-btn {
+      padding: 6px 12px;
+      font-size: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .preset-btn:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .preset-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .main {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .preview-area {
+      flex: 1;
+      padding: 24px;
+      overflow: auto;
+      background: var(--bg);
+    }
+
+    .screen-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .screen-tab {
+      padding: 8px 16px;
+      font-size: 13px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .screen-tab:hover {
+      color: var(--text);
+    }
+
+    .screen-tab.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .phone-frame {
+      width: 375px;
+      height: 700px;
+      background: var(--surface);
+      border-radius: 24px;
+      border: 3px solid var(--border);
+      overflow: hidden;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .phone-status-bar {
+      height: 44px;
+      background: var(--surface-2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .phone-content {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--bg);
+    }
+
+    .phone-nav {
+      height: 64px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      color: var(--text-muted);
+      font-size: 10px;
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+
+    .nav-item.active {
+      color: var(--primary);
+    }
+
+    .nav-item svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    /* App screens */
+    .app-header {
+      padding: 16px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .app-header h1 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .app-header .subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .app-body {
+      padding: 16px;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .card-meta {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 16px;
+      border: 1px solid var(--border);
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* Grades */
+    .grade-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .grade-a-star { background: #059669; color: white; }
+    .grade-a { background: #10b981; color: white; }
+    .grade-b { background: #3b82f6; color: white; }
+    .grade-c { background: #6366f1; color: white; }
+    .grade-d { background: #f59e0b; color: white; }
+    .grade-e { background: #f97316; color: white; }
+    .grade-f { background: #ef4444; color: white; }
+
+    /* Marks grid */
+    .marks-grid {
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .marks-row {
+      display: grid;
+      grid-template-columns: 1fr 60px 50px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .marks-row:last-child {
+      border-bottom: none;
+    }
+
+    .marks-row.header {
+      background: var(--surface-2);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .marks-cell {
+      padding: 12px;
+      display: flex;
+      align-items: center;
+    }
+
+    .marks-input {
+      width: 100%;
+      padding: 6px 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    /* Feedback */
+    .feedback-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .feedback-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .feedback-text {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-muted);
+      background: var(--bg);
+      padding: 12px;
+      border-radius: 6px;
+    }
+
+    .feedback-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    /* Search */
+    .search-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .search-bar input {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .search-bar input::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* FAB */
+    .fab {
+      position: absolute;
+      bottom: 80px;
+      right: 20px;
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: var(--primary);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+      cursor: pointer;
+    }
+
+    .fab svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    /* Offline indicator */
+    .offline-banner {
+      background: var(--warning);
+      color: #000;
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 500;
+      text-align: center;
+    }
+
+    /* Prompt area */
+    .prompt-area {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 20px;
+    }
+
+    .prompt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .prompt-header h3 {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .copy-btn {
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .copy-btn:hover {
+      background: var(--primary-hover);
+    }
+
+    .copy-btn.copied {
+      background: var(--success);
+    }
+
+    .prompt-output {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+      padding: 16px;
+      border-radius: var(--radius);
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    /* Toggle */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .toggle {
+      width: 44px;
+      height: 24px;
+      background: var(--surface-2);
+      border-radius: 12px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle.active {
+      background: var(--primary);
+    }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s;
+    }
+
+    .toggle.active::after {
+      transform: translateX(20px);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="controls">
+      <h2>Teacher App Preview</h2>
+
+      <div class="presets">
+        <button class="preset-btn active" onclick="applyPreset('default')">Default</button>
+        <button class="preset-btn" onclick="applyPreset('compact')">Compact</button>
+        <button class="preset-btn" onclick="applyPreset('airy')">Airy</button>
+        <button class="preset-btn" onclick="applyPreset('bold')">Bold</button>
+      </div>
+
+      <div class="control-group">
+        <h3>Theme</h3>
+        <div class="control">
+          <label>Primary Color</label>
+          <input type="color" id="primaryColor" value="#3b82f6" onchange="updateColor(this.value)">
+        </div>
+        <div class="control">
+          <label>Card Radius: <span id="radiusVal">8</span>px</label>
+          <input type="range" id="cardRadius" min="0" max="24" value="8" oninput="updateState()">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>Spacing</h3>
+        <div class="control">
+          <label>Card Padding: <span id="paddingVal">16</span>px</label>
+          <input type="range" id="cardPadding" min="8" max="32" value="16" oninput="updateState()">
+        </div>
+        <div class="control">
+          <label>Content Gap: <span id="gapVal">12</span>px</label>
+          <input type="range" id="contentGap" min="8" max="24" value="12" oninput="updateState()">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>Typography</h3>
+        <div class="control">
+          <label>Font Size: <span id="fontVal">13</span>px</label>
+          <input type="range" id="baseFontSize" min="11" max="16" value="13" oninput="updateState()">
+        </div>
+        <div class="control">
+          <label>Header Style</label>
+          <select id="headerStyle" onchange="updateState()">
+            <option value="standard">Standard</option>
+            <option value="large">Large Title</option>
+            <option value="compact">Compact</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>Features</h3>
+        <div class="toggle-row">
+          <label>Show offline banner</label>
+          <div class="toggle" id="offlineToggle" onclick="toggleFeature('offline')"></div>
+        </div>
+        <div class="toggle-row">
+          <label>Show FAB</label>
+          <div class="toggle active" id="fabToggle" onclick="toggleFeature('fab')"></div>
+        </div>
+        <div class="toggle-row">
+          <label>Show grade badges</label>
+          <div class="toggle active" id="gradeToggle" onclick="toggleFeature('grades')"></div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>Navigation</h3>
+        <div class="control">
+          <label>Nav Style</label>
+          <select id="navStyle" onchange="updateState()">
+            <option value="bottom">Bottom Tab Bar</option>
+            <option value="icons">Icons Only</option>
+            <option value="labels">Labels Only</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="preview-area">
+        <div class="screen-tabs">
+          <button class="screen-tab active" onclick="showScreen('dashboard')">Dashboard</button>
+          <button class="screen-tab" onclick="showScreen('classes')">Classes</button>
+          <button class="screen-tab" onclick="showScreen('students')">Students</button>
+          <button class="screen-tab" onclick="showScreen('marks')">Marks</button>
+          <button class="screen-tab" onclick="showScreen('feedback')">Feedback</button>
+        </div>
+
+        <div class="phone-frame">
+          <div class="phone-status-bar">
+            <span>9:41</span>
+            <span>📶 100%</span>
+          </div>
+
+          <div id="offlineBanner" class="offline-banner" style="display: none;">
+            ⚡ You're offline. Changes saved locally.
+          </div>
+
+          <div class="phone-content" id="phoneContent">
+            <!-- Content rendered by JS -->
+          </div>
+
+          <div id="fab" class="fab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </div>
+
+          <div class="phone-nav" id="phoneNav">
+            <div class="nav-item active" data-screen="dashboard">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+              <span>Home</span>
+            </div>
+            <div class="nav-item" data-screen="classes">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              </svg>
+              <span>Classes</span>
+            </div>
+            <div class="nav-item" data-screen="students">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              <span>Students</span>
+            </div>
+            <div class="nav-item" data-screen="marks">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              <span>Marks</span>
+            </div>
+            <div class="nav-item" data-screen="feedback">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>Feedback</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="prompt-area">
+        <div class="prompt-header">
+          <h3>Implementation Prompt</h3>
+          <button class="copy-btn" onclick="copyPrompt()">Copy Prompt</button>
+        </div>
+        <div class="prompt-output" id="promptOutput"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DEFAULTS = {
+      primaryColor: '#3b82f6',
+      cardRadius: 8,
+      cardPadding: 16,
+      contentGap: 12,
+      baseFontSize: 13,
+      headerStyle: 'standard',
+      navStyle: 'bottom',
+      showOffline: false,
+      showFab: true,
+      showGrades: true
+    };
+
+    const state = { ...DEFAULTS };
+    let currentScreen = 'dashboard';
+
+    const PRESETS = {
+      default: { ...DEFAULTS },
+      compact: {
+        ...DEFAULTS,
+        cardRadius: 4,
+        cardPadding: 12,
+        contentGap: 8,
+        baseFontSize: 12,
+        headerStyle: 'compact'
+      },
+      airy: {
+        ...DEFAULTS,
+        cardRadius: 16,
+        cardPadding: 24,
+        contentGap: 16,
+        baseFontSize: 14,
+        headerStyle: 'large'
+      },
+      bold: {
+        ...DEFAULTS,
+        primaryColor: '#8b5cf6',
+        cardRadius: 12,
+        cardPadding: 20,
+        baseFontSize: 14,
+        headerStyle: 'large'
+      }
+    };
+
+    function applyPreset(name) {
+      Object.assign(state, PRESETS[name]);
+
+      document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      // Update controls
+      document.getElementById('primaryColor').value = state.primaryColor;
+      document.getElementById('cardRadius').value = state.cardRadius;
+      document.getElementById('cardPadding').value = state.cardPadding;
+      document.getElementById('contentGap').value = state.contentGap;
+      document.getElementById('baseFontSize').value = state.baseFontSize;
+      document.getElementById('headerStyle').value = state.headerStyle;
+      document.getElementById('navStyle').value = state.navStyle;
+
+      updateColor(state.primaryColor);
+      updateState();
+    }
+
+    function updateColor(color) {
+      state.primaryColor = color;
+      document.documentElement.style.setProperty('--primary', color);
+      updatePrompt();
+    }
+
+    function updateState() {
+      state.cardRadius = parseInt(document.getElementById('cardRadius').value);
+      state.cardPadding = parseInt(document.getElementById('cardPadding').value);
+      state.contentGap = parseInt(document.getElementById('contentGap').value);
+      state.baseFontSize = parseInt(document.getElementById('baseFontSize').value);
+      state.headerStyle = document.getElementById('headerStyle').value;
+      state.navStyle = document.getElementById('navStyle').value;
+
+      document.getElementById('radiusVal').textContent = state.cardRadius;
+      document.getElementById('paddingVal').textContent = state.cardPadding;
+      document.getElementById('gapVal').textContent = state.contentGap;
+      document.getElementById('fontVal').textContent = state.baseFontSize;
+
+      renderPreview();
+      updatePrompt();
+    }
+
+    function toggleFeature(feature) {
+      const toggle = document.getElementById(feature + 'Toggle');
+      toggle.classList.toggle('active');
+
+      if (feature === 'offline') {
+        state.showOffline = toggle.classList.contains('active');
+        document.getElementById('offlineBanner').style.display = state.showOffline ? 'block' : 'none';
+      } else if (feature === 'fab') {
+        state.showFab = toggle.classList.contains('active');
+        document.getElementById('fab').style.display = state.showFab ? 'flex' : 'none';
+      } else if (feature === 'grades') {
+        state.showGrades = toggle.classList.contains('active');
+        renderPreview();
+      }
+
+      updatePrompt();
+    }
+
+    function showScreen(screen) {
+      currentScreen = screen;
+      document.querySelectorAll('.screen-tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelector(`.screen-tab[onclick="showScreen('${screen}')"]`).classList.add('active');
+
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.screen === screen);
+      });
+
+      renderPreview();
+    }
+
+    function renderPreview() {
+      const content = document.getElementById('phoneContent');
+      const r = state.cardRadius;
+      const p = state.cardPadding;
+      const g = state.contentGap;
+      const f = state.baseFontSize;
+      const headerSize = state.headerStyle === 'large' ? 24 : state.headerStyle === 'compact' ? 16 : 20;
+
+      const cardStyle = `border-radius: ${r}px; padding: ${p}px; margin-bottom: ${g}px; font-size: ${f}px;`;
+      const gradeHtml = (grade, cls) => state.showGrades ? `<div class="grade-badge ${cls}">${grade}</div>` : '';
+
+      const screens = {
+        dashboard: `
+          <div class="app-header" style="padding: ${p}px;">
+            <h1 style="font-size: ${headerSize}px;">Dashboard</h1>
+            <div class="subtitle">Class 4A • 32 Students</div>
+          </div>
+          <div class="app-body" style="padding: ${p}px; gap: ${g}px;">
+            <div class="stats-grid" style="gap: ${g}px;">
+              <div class="stat-card" style="${cardStyle}">
+                <div class="stat-value" style="color: var(--primary);">32</div>
+                <div class="stat-label">Students</div>
+              </div>
+              <div class="stat-card" style="${cardStyle}">
+                <div class="stat-value" style="color: var(--success);">78%</div>
+                <div class="stat-label">Class Average</div>
+              </div>
+            </div>
+            <div class="card" style="${cardStyle}">
+              <div class="card-title">Recent Assessment</div>
+              <div class="card-subtitle">Mathematics - Unit Test 3</div>
+              <div class="card-meta">
+                <span>📊 Avg: 72%</span>
+                <span>📈 Top: 95%</span>
+              </div>
+            </div>
+            <div class="card" style="${cardStyle}">
+              <div class="card-title">Pending Feedback</div>
+              <div class="card-subtitle">5 students need feedback</div>
+            </div>
+          </div>
+        `,
+        classes: `
+          <div class="app-header" style="padding: ${p}px;">
+            <h1 style="font-size: ${headerSize}px;">My Classes</h1>
+          </div>
+          <div class="app-body" style="padding: ${p}px;">
+            <div class="card" style="${cardStyle}">
+              <div class="card-title">Class 4A</div>
+              <div class="card-subtitle">32 Students • 6 Subjects</div>
+              <div class="card-meta">
+                <span>English</span>
+                <span>Mathematics</span>
+                <span>+4</span>
+              </div>
+            </div>
+            <div class="card" style="${cardStyle}">
+              <div class="card-title">Class 3B</div>
+              <div class="card-subtitle">28 Students • 5 Subjects</div>
+              <div class="card-meta">
+                <span>English</span>
+                <span>Science</span>
+                <span>+3</span>
+              </div>
+            </div>
+            <div class="card" style="${cardStyle}">
+              <div class="card-title">Class 5A</div>
+              <div class="card-subtitle">30 Students • 6 Subjects</div>
+            </div>
+          </div>
+        `,
+        students: `
+          <div class="app-header" style="padding: ${p}px;">
+            <h1 style="font-size: ${headerSize}px;">Students</h1>
+            <div class="subtitle">Class 4A</div>
+          </div>
+          <div class="app-body" style="padding: ${p}px;">
+            <div class="search-bar" style="border-radius: ${r}px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" placeholder="Search by name or roll number...">
+            </div>
+            <div class="card" style="${cardStyle} display: flex; align-items: center; gap: 12px;">
+              <div style="flex: 1;">
+                <div class="card-title">Arun Kumar</div>
+                <div class="card-subtitle">Roll #01 • Parent: +91 98765...</div>
+              </div>
+              ${gradeHtml('A', 'grade-a')}
+            </div>
+            <div class="card" style="${cardStyle} display: flex; align-items: center; gap: 12px;">
+              <div style="flex: 1;">
+                <div class="card-title">Priya Sharma</div>
+                <div class="card-subtitle">Roll #02 • Parent: +91 98432...</div>
+              </div>
+              ${gradeHtml('B', 'grade-b')}
+            </div>
+            <div class="card" style="${cardStyle} display: flex; align-items: center; gap: 12px;">
+              <div style="flex: 1;">
+                <div class="card-title">Rahul Singh</div>
+                <div class="card-subtitle">Roll #03 • Parent: +91 99876...</div>
+              </div>
+              ${gradeHtml('A*', 'grade-a-star')}
+            </div>
+          </div>
+        `,
+        marks: `
+          <div class="app-header" style="padding: ${p}px;">
+            <h1 style="font-size: ${headerSize}px;">Marks Entry</h1>
+            <div class="subtitle">Mathematics - Unit Test 3 (50 marks)</div>
+          </div>
+          <div class="app-body" style="padding: ${p}px;">
+            <div class="marks-grid" style="border-radius: ${r}px; font-size: ${f}px;">
+              <div class="marks-row header">
+                <div class="marks-cell">Student</div>
+                <div class="marks-cell">Marks</div>
+                <div class="marks-cell">Grade</div>
+              </div>
+              <div class="marks-row">
+                <div class="marks-cell">Arun Kumar</div>
+                <div class="marks-cell"><input class="marks-input" value="45" style="border-radius: ${r/2}px;"></div>
+                <div class="marks-cell">${gradeHtml('A*', 'grade-a-star')}</div>
+              </div>
+              <div class="marks-row">
+                <div class="marks-cell">Priya Sharma</div>
+                <div class="marks-cell"><input class="marks-input" value="38" style="border-radius: ${r/2}px;"></div>
+                <div class="marks-cell">${gradeHtml('B', 'grade-b')}</div>
+              </div>
+              <div class="marks-row">
+                <div class="marks-cell">Rahul Singh</div>
+                <div class="marks-cell"><input class="marks-input" value="42" style="border-radius: ${r/2}px;"></div>
+                <div class="marks-cell">${gradeHtml('A', 'grade-a')}</div>
+              </div>
+              <div class="marks-row">
+                <div class="marks-cell">Meera Patel</div>
+                <div class="marks-cell"><input class="marks-input" value="" placeholder="—" style="border-radius: ${r/2}px;"></div>
+                <div class="marks-cell"></div>
+              </div>
+            </div>
+          </div>
+        `,
+        feedback: `
+          <div class="app-header" style="padding: ${p}px;">
+            <h1 style="font-size: ${headerSize}px;">Feedback</h1>
+            <div class="subtitle">Generate parent messages</div>
+          </div>
+          <div class="app-body" style="padding: ${p}px;">
+            <div class="feedback-card" style="${cardStyle}">
+              <div class="feedback-header">
+                <div>
+                  <div class="card-title">Arun Kumar</div>
+                  <div class="card-subtitle">Mathematics: 90% (A*)</div>
+                </div>
+                ${gradeHtml('A*', 'grade-a-star')}
+              </div>
+              <div class="feedback-text" style="border-radius: ${r}px; font-size: ${f}px;">
+                Dear Parent, Arun scored 45/50 (90%) in the Mathematics Unit Test 3. Excellent performance! He shows strong problem-solving skills. Please continue to encourage his efforts.
+              </div>
+              <div class="feedback-actions">
+                <button class="btn btn-primary" style="border-radius: ${r}px;">📋 Copy</button>
+                <button class="btn btn-secondary" style="border-radius: ${r}px;">📱 WhatsApp</button>
+              </div>
+            </div>
+            <div class="feedback-card" style="${cardStyle}">
+              <div class="feedback-header">
+                <div>
+                  <div class="card-title">Priya Sharma</div>
+                  <div class="card-subtitle">Mathematics: 76% (B)</div>
+                </div>
+                ${gradeHtml('B', 'grade-b')}
+              </div>
+              <div class="feedback-text" style="border-radius: ${r}px; font-size: ${f}px;">
+                Dear Parent, Priya scored 38/50 (76%) in Mathematics Unit Test 3. Good performance with room for improvement. Focus on word problems would help.
+              </div>
+              <div class="feedback-actions">
+                <button class="btn btn-primary" style="border-radius: ${r}px;">📋 Copy</button>
+                <button class="btn btn-secondary" style="border-radius: ${r}px;">📱 WhatsApp</button>
+              </div>
+            </div>
+          </div>
+        `
+      };
+
+      content.innerHTML = screens[currentScreen];
+    }
+
+    function updatePrompt() {
+      const parts = [];
+
+      // Only mention non-default values
+      if (state.primaryColor !== DEFAULTS.primaryColor) {
+        parts.push(`primary color ${state.primaryColor}`);
+      }
+
+      if (state.cardRadius !== DEFAULTS.cardRadius) {
+        if (state.cardRadius < 4) parts.push('sharp corners (minimal border-radius)');
+        else if (state.cardRadius > 16) parts.push(`rounded corners (${state.cardRadius}px border-radius)`);
+        else parts.push(`${state.cardRadius}px border-radius`);
+      }
+
+      if (state.cardPadding !== DEFAULTS.cardPadding) {
+        if (state.cardPadding < 12) parts.push('compact padding');
+        else if (state.cardPadding > 20) parts.push('generous padding');
+        else parts.push(`${state.cardPadding}px padding`);
+      }
+
+      if (state.contentGap !== DEFAULTS.contentGap) {
+        parts.push(`${state.contentGap}px spacing between elements`);
+      }
+
+      if (state.baseFontSize !== DEFAULTS.baseFontSize) {
+        if (state.baseFontSize < 12) parts.push('compact typography');
+        else if (state.baseFontSize > 14) parts.push('larger, more readable typography');
+        else parts.push(`${state.baseFontSize}px base font size`);
+      }
+
+      if (state.headerStyle !== DEFAULTS.headerStyle) {
+        parts.push(`${state.headerStyle} header style`);
+      }
+
+      if (state.navStyle !== DEFAULTS.navStyle) {
+        parts.push(`${state.navStyle} navigation style`);
+      }
+
+      if (state.showOffline) {
+        parts.push('an offline status banner at the top when disconnected');
+      }
+
+      if (!state.showFab) {
+        parts.push('no floating action button');
+      }
+
+      if (!state.showGrades) {
+        parts.push('hide grade badges inline (show only in detail views)');
+      }
+
+      let prompt = 'Build the Teacher Assistant PWA with:\n\n';
+      prompt += '**Stack:** Next.js 14 (App Router), Tailwind CSS, shadcn/ui, Zustand, sql.js\n\n';
+      prompt += '**Key screens:** Dashboard, Classes, Students, Marks Entry (grid), Feedback Generation\n\n';
+
+      if (parts.length > 0) {
+        prompt += '**Design customizations:**\n';
+        prompt += parts.map(p => `- ${p}`).join('\n');
+        prompt += '\n\n';
+      }
+
+      prompt += '**Features:**\n';
+      prompt += '- Bottom tab navigation with 5 tabs\n';
+      prompt += '- IGCSE grade calculation (A* to U)\n';
+      prompt += '- Keyboard-navigable marks grid with auto-save\n';
+      prompt += '- Feedback templates with copy-to-clipboard\n';
+      prompt += '- PWA with offline support (service worker + IndexedDB)\n';
+      prompt += '- Mobile-first responsive design (375px base)\n\n';
+      prompt += '**Color scheme:** Dark theme with ' + (state.primaryColor !== DEFAULTS.primaryColor ? state.primaryColor : 'blue (#3b82f6)') + ' as primary accent.';
+
+      document.getElementById('promptOutput').textContent = prompt;
+    }
+
+    function copyPrompt() {
+      const prompt = document.getElementById('promptOutput').textContent;
+      navigator.clipboard.writeText(prompt).then(() => {
+        const btn = document.querySelector('.copy-btn');
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy Prompt';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Initialize
+    renderPreview();
+    updatePrompt();
+  </script>
+</body>
+</html>
