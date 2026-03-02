@@ -6,7 +6,7 @@
 
 ## Status
 
-`executing` — Wave 1 complete, Wave 2 pending
+`executing` — Wave 2 complete, Wave 3 pending
 
 ## Progress
 
@@ -15,21 +15,26 @@
 | PWA Scaffold | Complete | Next.js 16, shadcn/ui, PWA manifest, service worker |
 | Database | Complete | sql.js + IndexedDB persistence, Drizzle schema |
 | Base Layout | Complete | Header, bottom nav, offline indicator, 5 routes |
-| State Management | Complete | Zustand stores (skeleton) |
+| State Management | Complete | Zustand stores with service integration |
 | Test Infrastructure | Complete | Vitest + Testing Library configured |
-| Class Management | Pending | Wave 2 |
+| Class Management | Complete | Wave 2: CRUD, subjects, IGCSE templates |
 | Student Management | Pending | Wave 3 |
 | Marks Entry | Pending | Wave 4 |
 | Feedback Generation | Pending | Wave 5 |
 
-## Wave 1 Verification
+## Wave 2 Verification
 
 | Check | Status |
 |-------|--------|
 | TypeScript clean | ✓ 0 errors |
 | Tests pass | ✓ 3/3 |
 | Build succeeds | ✓ |
-| PWA manifest | ✓ Generated |
+| classService | ✓ CRUD implemented |
+| subjectService | ✓ CRUD + bulk create |
+| ClassList page | ✓ With create dialog |
+| ClassDetail page | ✓ With subject management |
+| IGCSE templates | ✓ 20 subjects available |
+| Class switcher | ✓ Header auto-select |
 
 ## Recent Activity
 
@@ -38,6 +43,7 @@
 - 2026-03-02: Research phase completed (RESEARCH.md, PRD.md, ARCHITECTURE.md)
 - 2026-03-02: Plan v001 created and approved
 - 2026-03-02: Wave 1 execution complete (T1.1–T1.9)
+- 2026-03-02: Wave 2 execution complete (T2.1–T2.8)
 
 ## Blockers
 
@@ -46,7 +52,7 @@ None
 ## Next Actions
 
 1. ~~Complete Wave 1: Foundation~~ ✓
-2. Execute Wave 2: Class & Subject Management
+2. ~~Execute Wave 2: Class & Subject Management~~ ✓
 3. Execute Wave 3: Student Management
 4. Execute Wave 4: Marks Entry
 5. Execute Wave 5: Feedback Generation
