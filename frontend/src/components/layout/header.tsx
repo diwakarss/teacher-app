@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -47,23 +49,30 @@ export function Header() {
           <span className="font-semibold text-gray-900">Teacher Assistant</span>
         </div>
 
-        {classes.length > 0 && (
-          <Select
-            value={activeClassId || ''}
-            onValueChange={handleClassChange}
-          >
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Select class" />
-            </SelectTrigger>
-            <SelectContent>
-              {classes.map((cls) => (
-                <SelectItem key={cls.id} value={cls.id}>
-                  {cls.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <div className="flex items-center gap-2">
+          {classes.length > 0 && (
+            <Select
+              value={activeClassId || ''}
+              onValueChange={handleClassChange}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Select class" />
+              </SelectTrigger>
+              <SelectContent>
+                {classes.map((cls) => (
+                  <SelectItem key={cls.id} value={cls.id}>
+                    {cls.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Link href="/settings">
+            <Button variant="ghost" size="icon">
+              <Settings className="h-5 w-5" />
+            </Button>
+          </Link>
+        </div>
       </div>
     </header>
   );
