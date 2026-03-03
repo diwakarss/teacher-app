@@ -1,0 +1,26 @@
+{
+  "status": "pass",
+  "exit_code": 0,
+  "error_type": null,
+  "retry_recommended": false,
+  "blocking": false,
+  "degraded_mode": false,
+  "version": "1.0",
+  "ddd_detected": false,
+  "findings": {
+    "critical": [],
+    "warning": [],
+    "info": []
+  },
+  "stats": {
+    "files_analyzed": 101,
+    "import_edges": 9,
+    "circular_deps_found": 0,
+    "known_limitations": [
+      "Cannot detect dynamic imports",
+      "TypeScript path aliases require tsconfig parsing",
+      "Re-exports and aliased imports may not be fully resolved",
+      "Regex-based pattern detection has limited accuracy"
+    ]
+  }
+}
