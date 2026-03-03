@@ -1,6 +1,6 @@
 # Technology Stack
 
-**Analysis Date:** 2026-03-02
+**Analysis Date:** 2026-03-03
 
 ## Languages
 
@@ -19,7 +19,7 @@
 
 **Package Manager:**
 - pnpm - Primary package manager
-- Lockfile: pnpm-lock.yaml (present)
+- Lockfile: `frontend/pnpm-lock.yaml` (present)
 
 ## Frameworks
 
@@ -60,7 +60,10 @@
 - `zustand` 5.0.11 - Global state management
 - `pdfjs-dist` 4.10.38 - PDF text extraction and rendering
 - `tesseract.js` 7.0.0 - OCR for image text extraction
-- `@anthropic-ai/sdk` 0.78.0 - Installed but using direct fetch instead
+
+**AI/Generation:**
+- `@aws-sdk/client-bedrock-runtime` 3.1000.0 - Server-side AI via AWS Bedrock
+- `@anthropic-ai/sdk` 0.78.0 - Client-side feedback generation
 
 **Infrastructure:**
 - `clsx` 2.1.1 + `tailwind-merge` 3.5.0 - Class name utilities (`cn()` function)
@@ -70,16 +73,20 @@
 ## Configuration
 
 **Environment:**
-- No `.env` files - Fully client-side application
-- API keys stored in localStorage via Zustand persist middleware
-- sql.js WASM loaded from CDN: `https://cdn.jsdelivr.net/npm/sql.js@1.14.0/dist/sql-wasm.wasm`
-- PDF.js worker loaded from CDN: `https://cdn.jsdelivr.net/npm/pdfjs-dist@{version}/build/pdf.worker.min.mjs`
+- `frontend/.env.local` - Server-side credentials (gitignored)
+- Required: `AWS_BEARER_TOKEN_BEDROCK` OR `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`
+- Optional: `AWS_REGION` (defaults to us-east-1)
+- Client-side API keys stored in localStorage via Zustand persist
+
+**External Resources (CDN):**
+- sql.js WASM: `https://cdn.jsdelivr.net/npm/sql.js@1.14.0/dist/sql-wasm.wasm`
+- PDF.js worker: `https://cdn.jsdelivr.net/npm/pdfjs-dist@{version}/build/pdf.worker.min.mjs`
 
 **Build Configuration:**
-- `next.config.ts`: PWA wrapper, WASM headers (`Content-Type: application/wasm`), React strict mode
-- `tsconfig.json`: ES2017 target, bundler module resolution, `@/*` path alias to `./src/*`
-- `vitest.config.ts`: jsdom environment, v8 coverage, setup in `src/test/setup.ts`
-- `eslint.config.mjs`: Next.js core-web-vitals + TypeScript rules
+- `frontend/next.config.ts`: PWA wrapper, WASM headers, React strict mode
+- `frontend/tsconfig.json`: ES2017 target, bundler resolution, `@/*` path alias
+- `frontend/vitest.config.ts`: jsdom environment, v8 coverage
+- `frontend/.prettierrc`: Semi, single quotes, 2-space indent, 100 char width
 
 ## Platform Requirements
 
@@ -106,13 +113,21 @@ pnpm lint             # ESLint check
 pnpm typecheck        # TypeScript type check
 ```
 
-## Version Notes
+## Phase 4 Stack Requirements
 
-- Next.js 16 with React 19 is cutting edge (as of analysis date)
-- Tailwind CSS 4 (major version)
-- Vitest 4 (major version)
-- Tesseract.js 7 (major version with LSTM OCR)
+**Document Formatter (Word .docx):**
+- Not installed: Need `mammoth.js` for reading, `docx` for writing
+
+**Analytics (Charts):**
+- Not installed: Need `recharts` or `chart.js`
+
+**Cloud Sync (Google Drive):**
+- Not installed: Need Google Drive API SDK, OAuth library
+
+**Data Export:**
+- Partial: Print-to-PDF exists via browser print dialog
+- Need: JSON/CSV export utilities
 
 ---
 
-*Stack analysis: 2026-03-02*
+*Stack analysis: 2026-03-03*

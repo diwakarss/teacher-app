@@ -1,57 +1,58 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-03-02
+**Analysis Date:** 2026-03-03
 
 ## Naming Patterns
 
 **Files:**
 - Components: `kebab-case.tsx` (e.g., `class-form-dialog.tsx`, `marks-entry-grid.tsx`)
-- Services: `kebab-case.ts` (e.g., `class-service.ts`)
-- Stores: `kebab-case.ts` (e.g., `class-store.ts`)
+- Services: `{entity}-service.ts` (e.g., `class-service.ts`)
+- Stores: `{entity}-store.ts` (e.g., `class-store.ts`)
 - Pages: `page.tsx` (Next.js App Router convention)
 - Layouts: `layout.tsx`
 - Tests: `*.test.ts` (co-located with source)
 
 **Functions:**
 - camelCase for all functions
-- Async operations: `loadX`, `createX`, `updateX`, `deleteX`
+- Async operations: `loadX`, `createX`, `updateX`, `deleteX`, `generateX`
 - Handlers: `handleX` (e.g., `handleSave`, `handleClassChange`)
 - Getters: `getX`, `getXById`
 - Calculations: `calculateX` (e.g., `calculateIGCSEGrade`)
+- Builders: `buildX` (e.g., `buildLessonPlanPrompt`)
 
 **Variables:**
 - camelCase for variables and state
-- Boolean flags: `isX`, `hasX` (e.g., `isOnline`, `hasChanges`)
+- Boolean flags: `isX`, `hasX` (e.g., `isOnline`, `hasTextLayer`)
 - Loading states: `loading`, `generating`, `saving`
 
 **Types:**
 - PascalCase for types and interfaces
 - Entity types: `Class`, `Student`, `Assessment`, `Mark`, `Feedback`, `Chapter`
-- State interfaces: `ClassState`, `StudentState`
+- State interfaces: `ClassState`, `GenerationState`
 - Export `type` keyword for type-only exports
 
 **Constants:**
-- SCREAMING_SNAKE_CASE
-- Examples: `IGCSE_GRADES`, `ASSESSMENT_TYPES`, `FEEDBACK_TONES`, `CHAPTER_PATTERNS`
+- SCREAMING_SNAKE_CASE for module-level constants
+- Examples: `DB_NAME`, `MODEL_ID`, `CHAPTER_PATTERNS`
 
 ## Code Style
 
-**Formatting:**
-- No explicit Prettier config (uses defaults)
-- 2-space indentation (from editor)
-- Single quotes for imports
-- Semicolons required
+**Formatting (via .prettierrc):**
+- Semi: true (semicolons required)
+- Single quotes for strings
+- 2-space indentation
+- Trailing commas: es5
+- Print width: 100 characters
 
 **Linting:**
 - ESLint with `eslint-config-next` (core-web-vitals + TypeScript)
-- Config: `eslint.config.mjs`
-- Ignores: `.next/`, `out/`, `build/`
+- Config: `frontend/eslint.config.mjs`
 
 ## Import Organization
 
 **Order (observed pattern):**
 1. React/Next.js imports
-2. External libraries (ui components, icons)
+2. External libraries (UI components, icons, SDKs)
 3. Internal aliases (`@/stores/`, `@/services/`, `@/components/`)
 4. Relative imports
 5. Type-only imports (using `type` keyword)
@@ -66,14 +67,13 @@ import { Button } from '@/components/ui/button';
 import { Plus, AlertCircle } from 'lucide-react';
 import { useAppStore } from '@/stores/app-store';
 import { useClassStore } from '@/stores/class-store';
-import { classService } from '@/services/class-service';
 import { toast } from 'sonner';
 import type { Class } from '@/lib/db/schema';
 ```
 
 **Path Aliases:**
 - `@/*` maps to `./src/*` (configured in `tsconfig.json`)
-- Always use `@/` for non-relative imports
+- Always use `@/` for non-relative imports within src/
 
 ## Error Handling
 
@@ -82,6 +82,7 @@ import type { Class } from '@/lib/db/schema';
 - Set `error: string | null` state
 - Log with `console.error('Failed to X:', error)`
 - Toast notifications for user feedback
+- Re-throw when caller needs to handle
 
 ```typescript
 try {
@@ -90,9 +91,16 @@ try {
 } catch (error) {
   console.error('Failed to perform operation:', error);
   set({ error: (error as Error).message, loading: false });
-  toast.error('Failed to perform operation');
   throw error;
 }
+```
+
+**API Route Pattern:**
+```typescript
+return NextResponse.json({
+  success: false,
+  error: errorMessage,
+}, { status: 500 });
 ```
 
 ## Logging
@@ -107,14 +115,20 @@ try {
 ## Comments
 
 **When to Comment:**
-- SQL query structure in services
 - Complex business logic (grade boundaries)
-- Type casting explanations
+- SQL query structure in services
 - Regex patterns (chapter detection)
+- Type casting explanations
 
 **JSDoc/TSDoc:**
-- Not used extensively
-- Types provide documentation via Drizzle schema
+- Used for public utilities and prompt builders
+- Example:
+```typescript
+/**
+ * Opens a print dialog for the given HTML content
+ */
+export function printContent(html: string, options: PrintOptions): void
+```
 
 ## Function Design
 
@@ -123,6 +137,7 @@ try {
 **Parameters:**
 - Destructure props in components
 - Use object parameters for 3+ args
+- Use `Omit<Type, 'field'>` for partial data in create methods
 
 **Return Values:**
 - Explicit return types on exported functions
@@ -134,13 +149,14 @@ try {
 - Services export object with methods
 - Stores export hook (via `create()`)
 - Components export named function
+- Types export with `export type`
 
 **Service Pattern:**
 ```typescript
 export const xxxService = {
   async getAll(): Promise<X[]> { ... },
   async getById(id: string): Promise<X | null> { ... },
-  async create(data: NewX): Promise<X> { ... },
+  async create(data: Omit<NewX, 'id' | 'createdAt' | 'updatedAt'>): Promise<X> { ... },
   async update(id: string, data: Partial<X>): Promise<X> { ... },
   async delete(id: string): Promise<void> { ... },
 };
@@ -148,6 +164,14 @@ export const xxxService = {
 
 **Store Pattern:**
 ```typescript
+interface XxxState {
+  items: Entity[];
+  loading: boolean;
+  error: string | null;
+  loadItems: () => Promise<void>;
+  createItem: (data: NewData) => Promise<Entity>;
+}
+
 export const useXxxStore = create<XxxState>((set, get) => ({
   items: [],
   loading: false,
@@ -215,49 +239,6 @@ stmt.free();
 - Submit handlers as async functions
 - Toast for success/error feedback
 
-## Processing Progress Pattern (Phase 2)
-
-**For long-running operations:**
-```typescript
-const [progress, setProgress] = useState(0);
-const [progressText, setProgressText] = useState('');
-
-await processFile(file, (p) => {
-  setProgress(p.percentage);
-  setProgressText(`Processing page ${p.currentPage} of ${p.totalPages}...`);
-});
-```
-
-**Progress UI:**
-```typescript
-<Progress value={progress} className="w-full" />
-<p className="text-sm text-gray-600">{progressText}</p>
-```
-
-## Singleton Pattern (Phase 2)
-
-**For expensive resources:**
-```typescript
-let instance: Resource | null = null;
-let initPromise: Promise<Resource> | null = null;
-
-async function getInstance(): Promise<Resource> {
-  if (instance) return instance;
-  if (initPromise) return initPromise;
-  initPromise = createResource();
-  instance = await initPromise;
-  return instance;
-}
-
-export function cleanup(): void {
-  if (instance) {
-    instance.destroy();
-    instance = null;
-    initPromise = null;
-  }
-}
-```
-
 ## Git Conventions
 
 **Commit Format:** `type(scope): message`
@@ -271,4 +252,4 @@ export function cleanup(): void {
 
 ---
 
-*Convention analysis: 2026-03-02*
+*Convention analysis: 2026-03-03*

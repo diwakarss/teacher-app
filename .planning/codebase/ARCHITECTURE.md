@@ -1,6 +1,6 @@
 # Architecture
 
-**Analysis Date:** 2026-03-02
+**Analysis Date:** 2026-03-03
 
 ## Pattern Overview
 
@@ -10,7 +10,7 @@
 - Local-first data with SQLite in browser (sql.js + IndexedDB)
 - Client-side state management with Zustand
 - Service layer for database operations
-- Optional AI enhancement via Claude API
+- Server-side AI generation via Next.js API routes
 - Next.js App Router with route groups
 - Content processing pipeline (PDF + OCR)
 
@@ -18,36 +18,43 @@
 
 ### Presentation Layer
 - **Purpose:** UI rendering and user interaction
-- **Location:** `src/app/`, `src/components/`
+- **Location:** `frontend/src/app/`, `frontend/src/components/`
 - **Contains:** Pages (App Router), React components, UI primitives
-- **Depends on:** Stores, services (indirectly)
+- **Depends on:** Stores, hooks
 - **Used by:** End users via browser
 
 ### State Layer (Zustand Stores)
 - **Purpose:** Global client state, async operation management
-- **Location:** `src/stores/`
-- **Contains:** 7 stores (app, class, student, assessment, marks, feedback, content)
+- **Location:** `frontend/src/stores/`
+- **Contains:** 8 stores (app, class, student, assessment, marks, feedback, content, generation)
 - **Depends on:** Services, database initialization
 - **Used by:** Presentation layer via hooks
 
 ### Service Layer
 - **Purpose:** Business logic and database operations
-- **Location:** `src/services/`
-- **Contains:** 7 services matching data entities
+- **Location:** `frontend/src/services/`
+- **Contains:** 9 services matching data entities
 - **Depends on:** Database layer
 - **Used by:** Stores
 
-### Processing Layer (Phase 2)
+### API Layer
+- **Purpose:** Server-side operations (AI generation)
+- **Location:** `frontend/src/app/api/`
+- **Contains:** `generate/route.ts` for Claude/Bedrock calls
+- **Depends on:** AWS SDK, prompt builders
+- **Used by:** Generation store
+
+### Processing Layer
 - **Purpose:** Content extraction and transformation
-- **Location:** `src/lib/`
-- **Contains:** PDF extractor, OCR processor, chapter detector
+- **Location:** `frontend/src/lib/`
+- **Contains:** PDF extractor, OCR processor, chapter detector, PDF export
 - **Depends on:** pdfjs-dist, tesseract.js
-- **Used by:** Upload dialog component
+- **Used by:** Upload dialog, generation previews
 
 ### Database Layer
 - **Purpose:** SQLite operations and persistence
-- **Location:** `src/lib/db/`
-- **Contains:** `database.ts` (sql.js), `persist.ts` (IndexedDB), `schema.ts` (Drizzle types), `drizzle.ts` (unused ORM wrapper)
+- **Location:** `frontend/src/lib/db/`
+- **Contains:** `database.ts` (sql.js), `persist.ts` (IndexedDB), `schema.ts` (Drizzle types)
 - **Depends on:** sql.js, IndexedDB
 - **Used by:** Services
 
@@ -73,7 +80,27 @@ Store (updates state)
 Component (React reactivity)
 ```
 
-### Content Upload Flow (Phase 2)
+### AI Generation Flow (Online)
+
+```
+User configures generation form
+    |
+GenerationStore.generateXxx()
+    | POST to
+/api/generate route.ts
+    | calls
+AWS Bedrock (Claude 3.5 Haiku)
+    | returns JSON
+Store saves pending result
+    | user reviews
+savePendingXxx()
+    | calls
+xxxService.saveGenerated()
+    | persists to
+SQLite -> IndexedDB
+```
+
+### Content Upload Flow
 
 ```
 User selects file (PDF or image)
@@ -100,51 +127,11 @@ chapterService.create() -> SQLite
 persistDb() -> IndexedDB
 ```
 
-### AI Feedback Generation (Online)
-
-```
-User clicks "Generate Feedback"
-    |
-feedbackStore.generateBulkFeedback()
-    | checks useAI flag
-feedbackService.generateFeedbackWithAI() OR generateFeedbackFromTemplate()
-    | if AI
-fetch() -> Claude API
-    | if fails
-fallback to template
-    |
-feedbackService.create() -> SQLite -> IndexedDB
-    |
-Store updates -> Component re-renders
-```
-
-### State Management Pattern
-
-```typescript
-// Pattern: Store wraps service, manages loading/error states
-const useXxxStore = create<XxxState>((set, get) => ({
-  items: [],
-  loading: false,
-  error: null,
-
-  loadItems: async () => {
-    set({ loading: true, error: null });
-    try {
-      await initializeDb();
-      const items = await xxxService.getAll();
-      set({ items, loading: false });
-    } catch (error) {
-      set({ error: error.message, loading: false });
-    }
-  },
-}));
-```
-
 ## Key Abstractions
 
 ### Database Singleton
 - **Purpose:** Single sql.js instance throughout app lifecycle
-- **Location:** `src/lib/db/database.ts`
+- **Location:** `frontend/src/lib/db/database.ts`
 - **Pattern:** Promise-based lazy initialization
 
 ```typescript
@@ -162,7 +149,7 @@ export async function getDb(): Promise<Database> {
 
 ### Entity Types (Drizzle Schema)
 - **Purpose:** Type-safe entity definitions
-- **Location:** `src/lib/db/schema.ts`
+- **Location:** `frontend/src/lib/db/schema.ts`
 - **Pattern:** Drizzle schema exports inferred types
 
 ```typescript
@@ -171,56 +158,35 @@ export type Student = typeof students.$inferSelect;
 export type NewStudent = typeof students.$inferInsert;
 ```
 
-### OCR Worker Singleton (Phase 2)
-- **Purpose:** Reusable Tesseract worker
-- **Location:** `src/lib/ocr-processor.ts`
-- **Pattern:** Lazy initialization with warmup option
+### Prompt Builders
+- **Purpose:** Construct AI prompts for generation
+- **Location:** `frontend/src/lib/prompts/`
+- **Pattern:** Pure functions returning formatted prompts
 
 ```typescript
-let worker: Worker | null = null;
-
-async function getWorker(onProgress?): Promise<Worker> {
-  if (worker) return worker;
-  worker = await createWorker('eng', Tesseract.OEM.LSTM_ONLY, { logger });
-  return worker;
-}
+export function buildLessonPlanPrompt(params: LessonPlanParams): string
+export function buildQuestionPaperPrompt(params: QuestionPaperParams): string
 ```
-
-### PDF Cache (Phase 2)
-- **Purpose:** Avoid re-loading PDF for OCR fallback
-- **Location:** `src/lib/pdf-extractor.ts`
-- **Pattern:** Module-level cache with cleanup
-
-```typescript
-let cachedPdf: PDFDocumentProxy | null = null;
-
-export function clearPdfCache(): void {
-  if (cachedPdf) {
-    cachedPdf.destroy();
-    cachedPdf = null;
-  }
-}
-```
-
-### Grade Calculation
-- **Purpose:** IGCSE grade boundaries
-- **Location:** `src/services/marks-service.ts`
-- **Pattern:** Pure function, no network required
 
 ## Entry Points
 
 ### Root Layout
-- **Location:** `src/app/layout.tsx`
+- **Location:** `frontend/src/app/layout.tsx`
 - **Triggers:** Every page load
-- **Responsibilities:** HTML structure, fonts, Toaster component
+- **Responsibilities:** HTML structure, fonts, metadata, Toaster component
 
 ### App Layout
-- **Location:** `src/app/(app)/layout.tsx`
+- **Location:** `frontend/src/app/(app)/layout.tsx`
 - **Triggers:** All app routes within `(app)` group
 - **Responsibilities:** Wraps with AppShell (header, nav, offline indicator)
 
+### API Route (Generate)
+- **Location:** `frontend/src/app/api/generate/route.ts`
+- **Triggers:** POST from generation stores
+- **Responsibilities:** Claude/Bedrock API calls, response parsing
+
 ### Database Initialization
-- **Location:** `src/lib/db/database.ts` - `initializeDb()`
+- **Location:** `frontend/src/lib/db/database.ts` - `initializeDb()`
 - **Triggers:** First database operation (via stores)
 - **Responsibilities:** Load WASM, restore from IndexedDB, run migrations
 
@@ -230,24 +196,20 @@ export function clearPdfCache(): void {
 
 **Patterns:**
 - Stores set `error: string | null` state on failures
-- Components can display `ErrorDisplay` component
-- `ErrorBoundary` class component for uncaught errors
+- Toast notifications for user feedback
 - Console logging for debugging
+- API routes return `{ success: false, error: string }`
 
 ```typescript
 // Store pattern
 try {
   await someOperation();
+  toast.success('Operation completed');
 } catch (error) {
   console.error('Failed to X:', error);
   set({ error: (error as Error).message, loading: false });
 }
 ```
-
-**OCR Error Handling (Phase 2):**
-- Low confidence warning shown if OCR confidence < 70%
-- User can edit extracted text before saving
-- Toast notifications for processing failures
 
 ## Cross-Cutting Concerns
 
@@ -267,9 +229,11 @@ try {
 ## Route Structure
 
 ```
-src/app/
+frontend/src/app/
 ├── layout.tsx              # Root layout (fonts, toaster)
 ├── globals.css             # Tailwind imports
+├── api/
+│   └── generate/route.ts   # AI generation endpoint
 └── (app)/                  # App route group
     ├── layout.tsx          # App shell wrapper
     ├── page.tsx            # Dashboard
@@ -279,16 +243,25 @@ src/app/
     ├── students/page.tsx   # Student list
     ├── marks/page.tsx      # Marks entry
     ├── feedback/page.tsx   # Feedback generation
-    └── content/            # Phase 2
-        ├── page.tsx        # Chapter list by subject
-        └── [id]/page.tsx   # Chapter detail viewer
+    ├── content/
+    │   ├── page.tsx        # Chapter list by subject
+    │   └── [id]/page.tsx   # Chapter detail viewer
+    └── generate/
+        ├── page.tsx        # Generation hub
+        ├── lesson-plan/
+        │   ├── page.tsx    # New lesson plan
+        │   └── [id]/page.tsx
+        └── question-paper/
+            ├── page.tsx    # New question paper
+            └── [id]/page.tsx
 ```
 
 ## Database Schema
 
 ```
 classes (1) ─────── (*) subjects (1) ─────── (*) chapters
-    │                       │
+    │                       │                       │
+    │                       │                       └──── (*) lesson_plans
     │                       │
     └───── (*) students     └───── (*) assessments
               │                         │
@@ -297,24 +270,10 @@ classes (1) ─────── (*) subjects (1) ─────── (*) cha
                        │
                        │
                    (*) feedback
+
+subjects (1) ─────── (*) question_papers
 ```
-
-## IGCSE Grade Boundaries
-
-Implemented in `src/services/marks-service.ts`:
-
-| Grade | Percentage Range |
-|-------|------------------|
-| A* | 90-100 |
-| A | 80-89 |
-| B | 70-79 |
-| C | 60-69 |
-| D | 50-59 |
-| E | 40-49 |
-| F | 30-39 |
-| G | 20-29 |
-| U | 0-19 |
 
 ---
 
-*Architecture analysis: 2026-03-02*
+*Architecture analysis: 2026-03-03*

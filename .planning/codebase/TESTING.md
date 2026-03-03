@@ -1,12 +1,12 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-03-02
+**Analysis Date:** 2026-03-03
 
 ## Test Framework
 
 **Runner:**
 - Vitest 4.0.18
-- Config: `vitest.config.ts`
+- Config: `frontend/vitest.config.ts`
 
 **Assertion Library:**
 - Vitest built-in (`expect`)
@@ -17,7 +17,7 @@
 pnpm test              # Run in watch mode
 pnpm test:ci           # Run once (CI mode)
 pnpm test:coverage     # Run with v8 coverage
-pnpm test:e2e          # Playwright
+pnpm test:e2e          # Playwright E2E tests
 ```
 
 ## Test File Organization
@@ -28,17 +28,22 @@ pnpm test:e2e          # Playwright
 
 **Structure:**
 ```
-src/
+frontend/src/
 ├── lib/
 │   ├── utils.ts
-│   ├── utils.test.ts              # Co-located test
+│   ├── utils.test.ts
 │   ├── chapter-detector.ts
-│   └── chapter-detector.test.ts   # Co-located test (Phase 2)
-├── services/
-│   └── marks-service.ts           # No tests yet
+│   ├── chapter-detector.test.ts
+│   ├── pdf-export.ts
+│   ├── pdf-export.test.ts
+│   └── prompts/
+│       ├── lesson-plan-prompt.ts
+│       ├── lesson-plan-prompt.test.ts
+│       ├── question-paper-prompt.ts
+│       └── question-paper-prompt.test.ts
 └── test/
-    ├── setup.ts                   # Vitest setup
-    └── test-utils.tsx             # Custom render
+    ├── setup.ts                # Vitest setup
+    └── test-utils.tsx          # Custom render
 ```
 
 ## Test Structure
@@ -65,13 +70,13 @@ describe('cn utility', () => {
 
 **Patterns:**
 - `describe()` for grouping related tests
-- `it()` or `test()` for individual cases
-- Setup: In `src/test/setup.ts`
+- `it()` for individual cases
+- Setup: In `frontend/src/test/setup.ts`
 - Teardown: `afterEach(() => cleanup())` in setup
 
 ## Test Setup
 
-**Location:** `src/test/setup.ts`
+**Location:** `frontend/src/test/setup.ts`
 
 ```typescript
 import '@testing-library/jest-dom/vitest';
@@ -124,7 +129,7 @@ const mockSubmit = vi.fn();
 **What to Mock:**
 - Browser APIs (matchMedia, IndexedDB, clipboard)
 - Database operations (sql.js)
-- External API calls (Claude)
+- External API calls (Bedrock, Anthropic)
 - Heavy dependencies (pdfjs-dist, tesseract.js)
 
 **What NOT to Mock:**
@@ -133,7 +138,7 @@ const mockSubmit = vi.fn();
 
 ## Custom Render
 
-**Location:** `src/test/test-utils.tsx`
+**Location:** `frontend/src/test/test-utils.tsx`
 
 ```typescript
 import { ReactElement } from 'react';
@@ -156,27 +161,6 @@ export { customRender as render };
 import { render, screen } from '@/test/test-utils';
 ```
 
-## Fixtures and Factories
-
-**Test Data:** Not yet implemented
-
-**Recommended Pattern:**
-```typescript
-// test/factories/student.ts
-export const createStudent = (overrides?: Partial<Student>): Student => ({
-  id: crypto.randomUUID(),
-  name: 'Test Student',
-  rollNumber: '001',
-  classId: 'class-1',
-  parentName: null,
-  parentPhone: null,
-  parentEmail: null,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  ...overrides,
-});
-```
-
 ## Coverage
 
 **Requirements:** None enforced currently
@@ -195,7 +179,7 @@ coverage: {
 **View Coverage:**
 ```bash
 pnpm test:coverage
-# Opens HTML report in coverage/index.html
+# Reports in frontend/coverage/
 ```
 
 ## Test Types
@@ -203,7 +187,7 @@ pnpm test:coverage
 **Unit Tests:**
 - Scope: Pure functions, utilities
 - Location: Co-located `*.test.ts`
-- Current: `src/lib/utils.test.ts`, `src/lib/chapter-detector.test.ts`
+- Examples: `utils.test.ts`, `chapter-detector.test.ts`, `pdf-export.test.ts`
 
 **Integration Tests:**
 - Scope: Components with state
@@ -245,50 +229,40 @@ describe('Button', () => {
 });
 ```
 
-**Testing Chapter Detection (Phase 2):**
+**Async Testing:**
 ```typescript
-describe('detectChapters', () => {
-  it('detects "Chapter X: Title" format', () => {
-    const text = `Chapter 1: Introduction
-This is the introduction content.
-
-Chapter 2: Getting Started
-This is chapter 2 content.`;
-
-    const chapters = detectChapters(text);
-
-    expect(chapters).toHaveLength(2);
-    expect(chapters[0].name).toBe('Introduction');
-    expect(chapters[0].chapterNumber).toBe(1);
-  });
-
-  it('returns empty array for text without chapters', () => {
-    const text = `This is just regular text.
-No chapter markers here.`;
-
-    const chapters = detectChapters(text);
-
-    expect(chapters).toHaveLength(0);
-  });
+it('loads data asynchronously', async () => {
+  const result = await asyncFunction();
+  expect(result).toBeDefined();
 });
 ```
 
-## Test Gaps (Current State)
+**Error Testing:**
+```typescript
+it('throws on invalid input', () => {
+  expect(() => functionThatThrows()).toThrow('Expected error');
+});
+
+it('rejects promise on failure', async () => {
+  await expect(asyncFailure()).rejects.toThrow();
+});
+```
+
+## Existing Test Files
 
 **Tested:**
-- `cn()` utility function (3 tests)
-- `detectChapters()` function (8 tests) - Phase 2
-- `detectChapterFromFilename()` function (6 tests) - Phase 2
-- `suggestChapterName()` function (6 tests) - Phase 2
+- `frontend/src/lib/utils.test.ts` - cn() utility (3 tests)
+- `frontend/src/lib/chapter-detector.test.ts` - Chapter detection (20+ tests)
+- `frontend/src/lib/pdf-export.test.ts` - PDF formatting
+- `frontend/src/lib/prompts/lesson-plan-prompt.test.ts`
+- `frontend/src/lib/prompts/question-paper-prompt.test.ts`
 
 **Not Tested:**
-- Services (class, student, assessment, marks, feedback, chapter)
-- Stores (all 7 stores)
+- Services (all 9 service files)
+- Stores (all 8 stores)
 - Components (all feature components)
+- API routes
 - Database operations
-- AI integration
-- PDF extraction
-- OCR processing
 
 ## Recommended Testing Priorities
 
@@ -309,4 +283,4 @@ No chapter markers here.`;
 
 ---
 
-*Testing analysis: 2026-03-02*
+*Testing analysis: 2026-03-03*

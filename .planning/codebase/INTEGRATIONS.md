@@ -1,88 +1,58 @@
 # External Integrations
 
-**Analysis Date:** 2026-03-02
+**Analysis Date:** 2026-03-03
 
 ## APIs & External Services
 
-### Claude API (AI Feedback Generation)
+### AWS Bedrock (Server-side AI Generation)
 
-**Purpose:** Generate personalized parent feedback messages for student assessments
+**Purpose:** Generate lesson plans and question papers
 
-**Implementation:** `src/services/feedback-service.ts`
+**Implementation:** `frontend/src/app/api/generate/route.ts`
 
 **Integration Details:**
-- Uses direct `fetch()` calls, NOT the installed `@anthropic-ai/sdk` package
-- Endpoint: `https://api.anthropic.com/v1/messages`
+- Uses `@aws-sdk/client-bedrock-runtime` SDK
+- Model: Claude 3.5 Haiku (`us.anthropic.claude-3-5-haiku-20241022-v1:0`)
+- Max tokens: 4096, Temperature: 0.7
+- Inference via `ConverseCommand`
+
+**Authentication:**
+- API key: `AWS_BEARER_TOKEN_BEDROCK` (preferred)
+- OR IAM: `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`
+- Region: `AWS_REGION` (defaults to us-east-1)
+- Stored in `frontend/.env.local` (gitignored)
+
+### Claude API (Client-side Feedback)
+
+**Purpose:** Generate personalized parent feedback messages
+
+**Implementation:** `frontend/src/services/feedback-service.ts`
+
+**Integration Details:**
+- Uses direct `fetch()` to `https://api.anthropic.com/v1/messages`
 - Model: `claude-3-haiku-20240307`
 - Max tokens: 256
+- Header: `anthropic-dangerous-direct-browser-access: true`
 
 **Authentication:**
 - User-provided API key stored in localStorage
 - Key stored via Zustand persist in `teacher-app-feedback` localStorage key
-- Header: `x-api-key: {userApiKey}`
-- Required header: `anthropic-dangerous-direct-browser-access: true` (browser-side calls)
 
-**Fallback:** Template-based generation when API fails or no key provided
+**Fallback:** Template-based generation when API fails or no key
 
-**Code Pattern:**
-```typescript
-// src/services/feedback-service.ts
-const response = await fetch('https://api.anthropic.com/v1/messages', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-api-key': apiKey,
-    'anthropic-version': '2023-06-01',
-    'anthropic-dangerous-direct-browser-access': 'true',
-  },
-  body: JSON.stringify({
-    model: 'claude-3-haiku-20240307',
-    max_tokens: 256,
-    messages: [{ role: 'user', content: prompt }],
-  }),
-});
-```
+### CDN Resources
 
-### CDN - sql.js WASM Binary
+**sql.js WASM Binary:**
+- URL: `https://cdn.jsdelivr.net/npm/sql.js@1.14.0/dist/sql-wasm.wasm`
+- Location: `frontend/src/lib/db/database.ts`
 
-**Purpose:** Load SQLite WebAssembly binary
+**PDF.js Worker:**
+- URL: `https://cdn.jsdelivr.net/npm/pdfjs-dist@{version}/build/pdf.worker.min.mjs`
+- Location: `frontend/src/lib/pdf-extractor.ts`
 
-**URL:** `https://cdn.jsdelivr.net/npm/sql.js@1.14.0/dist/sql-wasm.wasm`
-
-**Implementation:** `src/lib/db/database.ts`
-
-```typescript
-const SQL = await initSqlJs({
-  locateFile: () => 'https://cdn.jsdelivr.net/npm/sql.js@1.14.0/dist/sql-wasm.wasm',
-});
-```
-
-### CDN - PDF.js Worker
-
-**Purpose:** Load PDF.js web worker for multi-threaded PDF processing
-
-**URL:** `https://cdn.jsdelivr.net/npm/pdfjs-dist@{version}/build/pdf.worker.min.mjs`
-
-**Implementation:** `src/lib/pdf-extractor.ts`
-
-```typescript
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-```
-
-### CDN - Tesseract.js Language Data
-
-**Purpose:** Load trained OCR language models
-
-**URL:** Loaded automatically by Tesseract.js from default CDN
-
-**Implementation:** `src/lib/ocr-processor.ts`
-
-```typescript
-const worker = await createWorker('eng', Tesseract.OEM.LSTM_ONLY, {
-  logger: (m) => { /* progress callback */ },
-});
-```
+**Tesseract.js Language Data:**
+- Loaded automatically by Tesseract.js from default CDN
+- Location: `frontend/src/lib/ocr-processor.ts`
 
 ## Data Storage
 
@@ -94,28 +64,18 @@ const worker = await createWorker('eng', Tesseract.OEM.LSTM_ONLY, {
 
 **Client:** Raw SQL via `db.prepare()`, `db.exec()`, `db.run()`
 
-**Schema Location:** `src/lib/db/schema.ts` (Drizzle definitions for types only)
+**Schema Location:** `frontend/src/lib/db/schema.ts`
 
 **Tables:**
-- `classes` - Class information (id, name, academic_year)
-- `subjects` - Subjects per class (id, name, class_id)
-- `students` - Student records (id, name, roll_number, class_id, parent info)
-- `assessments` - Assessment definitions (id, name, type, max_marks, etc.)
-- `marks` - Student marks (id, student_id, assessment_id, marks_obtained)
+- `classes` - Class information
+- `subjects` - Subjects per class
+- `students` - Student records with parent info
+- `assessments` - Assessment definitions
+- `marks` - Student marks
 - `feedback` - Generated feedback messages
-- `chapters` - Content chapters with OCR text (id, subject_id, name, content, source_type)
-
-**Query Example:**
-```typescript
-const db = await getDb();
-const stmt = db.prepare('SELECT * FROM students WHERE class_id = ?');
-stmt.bind([classId]);
-while (stmt.step()) {
-  const row = stmt.get();
-  // process row
-}
-stmt.free();
-```
+- `chapters` - Content with extracted text
+- `lesson_plans` - Generated lesson plans
+- `question_papers` - Generated question papers
 
 ### IndexedDB Persistence
 
@@ -123,16 +83,9 @@ stmt.free();
 **Object Store:** `database`
 **Key:** `sqlite_db`
 
-**Implementation:** `src/lib/db/persist.ts`
+**Implementation:** `frontend/src/lib/db/persist.ts`
 
 **Purpose:** Persist SQLite database binary for offline data retention
-
-**Pattern:**
-```typescript
-export async function saveDatabase(data: Uint8Array): Promise<void>
-export async function loadDatabase(): Promise<Uint8Array | null>
-export async function clearDatabase(): Promise<void>
-```
 
 ### LocalStorage (Zustand Persist)
 
@@ -140,24 +93,23 @@ export async function clearDatabase(): Promise<void>
 - `teacher-app-state`: Active class ID
 - `teacher-app-feedback`: Claude API key, AI toggle setting
 
-**Implementation:** Zustand `persist` middleware in stores
-
 ## Browser APIs
 
 | API | Purpose | Location |
 |-----|---------|----------|
-| IndexedDB | SQLite persistence | `src/lib/db/persist.ts` |
-| navigator.onLine | Offline detection | `src/components/layout/offline-indicator.tsx` |
-| Clipboard API | Copy feedback to clipboard | `src/app/(app)/feedback/page.tsx` |
-| File API | Upload PDFs and images | `src/components/content/upload-dialog.tsx` |
-| Canvas API | Render PDF pages for OCR | `src/lib/pdf-extractor.ts` |
-| FileReader API | Convert images to data URLs | `src/lib/ocr-processor.ts` |
+| IndexedDB | SQLite persistence | `frontend/src/lib/db/persist.ts` |
+| navigator.onLine | Offline detection | `frontend/src/hooks/use-online-status.ts` |
+| Clipboard API | Copy feedback | `frontend/src/app/(app)/feedback/page.tsx` |
+| File API | Upload PDFs/images | `frontend/src/components/content/upload-dialog.tsx` |
+| Canvas API | Render PDF pages | `frontend/src/lib/pdf-extractor.ts` |
+| FileReader API | Image to data URL | `frontend/src/lib/ocr-processor.ts` |
+| Print API | PDF export | `frontend/src/lib/pdf-export.ts` |
 
 ## Content Processing Pipeline
 
-### PDF Processing (Phase 2)
+### PDF Processing
 
-**Implementation:** `src/lib/pdf-extractor.ts`
+**Implementation:** `frontend/src/lib/pdf-extractor.ts`
 
 **Flow:**
 1. Load PDF via `pdfjs-dist`
@@ -173,16 +125,11 @@ export function hasTextLayer(result: PDFExtractionResult): boolean
 export function clearPdfCache(): void
 ```
 
-### OCR Processing (Phase 2)
+### OCR Processing
 
-**Implementation:** `src/lib/ocr-processor.ts`
+**Implementation:** `frontend/src/lib/ocr-processor.ts`
 
 **Technology:** Tesseract.js with LSTM OCR engine
-
-**Flow:**
-1. Initialize worker (singleton, reused)
-2. Process images sequentially
-3. Return combined text with confidence score
 
 **Key Functions:**
 ```typescript
@@ -192,11 +139,9 @@ export async function terminateWorker(): Promise<void>
 export async function warmupOCR(): Promise<void>
 ```
 
-### Chapter Detection (Phase 2)
+### Chapter Detection
 
-**Implementation:** `src/lib/chapter-detector.ts`
-
-**Purpose:** Auto-detect chapter headings from extracted text
+**Implementation:** `frontend/src/lib/chapter-detector.ts`
 
 **Patterns Detected:**
 - `Chapter X: Title`
@@ -207,11 +152,19 @@ export async function warmupOCR(): Promise<void>
 - `Topic X: Title`
 - `X. Title` (numbered sections)
 
+### PDF Export
+
+**Implementation:** `frontend/src/lib/pdf-export.ts`
+
+**Approach:** Browser print dialog with styled HTML
+
 **Key Functions:**
 ```typescript
-export function detectChapters(text: string): DetectedChapter[]
-export function detectChapterFromFilename(filename: string): { name, chapterNumber } | null
-export function suggestChapterName(text: string, filename: string, defaultNumber: number): { name, chapterNumber }
+export function printContent(html: string, options: PrintOptions): void
+export function formatLessonPlanForPrint(plan: LessonPlanOutput): string
+export function formatQuestionPaperForPrint(paper: QuestionPaperOutput): string
+export function exportLessonPlanPdf(plan: LessonPlanOutput): void
+export function exportQuestionPaperPdf(paper: QuestionPaperOutput): void
 ```
 
 ## Authentication & Identity
@@ -219,99 +172,46 @@ export function suggestChapterName(text: string, filename: string, defaultNumber
 **Auth Provider:** None implemented
 
 **API Key Management:**
-- User manually enters Claude API key via dialog
-- Key stored client-side in localStorage
-- No server-side proxying - direct browser-to-API calls
-- Security note: API key visible in browser dev tools
+- AWS credentials: Server-side env vars
+- Claude API key: User manually enters, stored in localStorage
+- Security note: Client key visible in browser dev tools
 
 ## Monitoring & Observability
 
 **Error Tracking:** None - `console.error()` only
 
-**Logging Approach:**
-- `console.error()` for operation failures in stores/services
-- `console.warn()` for AI fallback to templates
-- No structured logging
+**Logging:** Console in development, no production logging
+
+**Analytics:** None
 
 ## CI/CD & Deployment
 
-**Hosting:** Not configured (likely Vercel given Next.js)
+**Hosting:** Not configured (standard Next.js deployment)
 
-**CI Pipeline:** None detected
+**CI Pipeline:** None detected, test commands available
 
-## Environment Configuration
+## Phase 4 Integration Requirements
 
-**Required env vars:** None - fully client-side
+### Document Formatter (Word .docx)
+- **Status:** Not implemented
+- **Need:** `mammoth.js` for reading .docx, `docx` library for writing
+- **Purpose:** Upload Word docs, apply formatting rules
 
-**Secrets Location:**
-- Claude API key: localStorage (`teacher-app-feedback`)
-- Warning: Key exposed in browser, users provide own key
+### Analytics (Charts)
+- **Status:** Not implemented
+- **Need:** `recharts` or `chart.js` with React wrapper
+- **Purpose:** Student performance visualization
 
-## Integration Patterns Used
+### Cloud Sync (Google Drive)
+- **Status:** Not implemented
+- **Need:** Google Drive API SDK, OAuth library
+- **Purpose:** Backup and sync across devices
 
-### Database Initialization Pattern
-Used in all stores before database operations:
-
-```typescript
-// Every store method follows this pattern
-async someMethod() {
-  await initializeDb();  // Ensures DB and migrations are ready
-  const db = await getDb();
-  // ... perform operations
-  await persistDb();  // Save to IndexedDB
-}
-```
-
-### Service Layer Pattern
-Services provide raw SQL operations, stores provide state management:
-
-```typescript
-// Service (src/services/class-service.ts)
-export const classService = {
-  async getAll(): Promise<Class[]>,
-  async getById(id: string): Promise<Class | null>,
-  async create(data): Promise<Class>,
-  async update(id, data): Promise<Class>,
-  async delete(id: string): Promise<void>,
-};
-
-// Store (src/stores/class-store.ts)
-export const useClassStore = create<ClassState>((set, get) => ({
-  classes: [],
-  loading: false,
-  error: null,
-  loadClasses: async () => { /* calls classService */ },
-  createClass: async () => { /* calls classService, updates state */ },
-}));
-```
-
-### Processing Progress Pattern (Phase 2)
-Used for long-running operations like PDF/OCR processing:
-
-```typescript
-interface ProgressCallback {
-  currentPage: number;
-  totalPages: number;
-  percentage: number;
-  phase?: 'extracting' | 'rendering';
-}
-
-// Usage
-await extractTextFromPDF(file, (progress) => {
-  setProgressText(`Processing page ${progress.currentPage} of ${progress.totalPages}...`);
-  setProgress(progress.percentage);
-});
-```
-
-## Not Integrated (Out of Scope)
-
-- School management systems
-- Parent notification services (SMS/WhatsApp)
-- Cloud storage/backup
-- Authentication providers
-- Analytics services
-- Server-side API proxy for Claude
+### Data Export/Import
+- **Status:** Partial (print-to-PDF only)
+- **Need:** JSON export, CSV export, backup/restore utilities
+- **Purpose:** Data portability, backup
 
 ---
 
-*Integration audit: 2026-03-02*
+*Integration audit: 2026-03-03*
