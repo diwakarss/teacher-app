@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,7 @@ import { useOnlineStatus } from '@/hooks/use-online-status';
 import { useClassStore } from '@/stores/class-store';
 import { useContentStore } from '@/stores/content-store';
 import { subjectService } from '@/services/subject-service';
-import type { Subject, Chapter } from '@/lib/db/schema';
+import type { Subject } from '@/lib/db/schema';
 import type { GenerateLessonPlanParams } from '@/services/lesson-plan-service';
 
 interface LessonPlanFormProps {
@@ -56,18 +56,16 @@ export function LessonPlanForm({
     loadClasses();
   }, [loadClasses]);
 
+  const loadSubjectsForClass = useCallback(async (classId: string | null) => {
+    if (!classId) return;
+    const subs = await subjectService.getByClassId(classId);
+    setSubjects(subs);
+    setSelectedSubjectId((prev) => (subs.length > 0 && !prev ? subs[0].id : prev));
+  }, []);
+
   useEffect(() => {
-    async function loadSubjects() {
-      if (activeClassId) {
-        const subs = await subjectService.getByClassId(activeClassId);
-        setSubjects(subs);
-        if (subs.length > 0 && !selectedSubjectId) {
-          setSelectedSubjectId(subs[0].id);
-        }
-      }
-    }
-    loadSubjects();
-  }, [activeClassId, selectedSubjectId]);
+    loadSubjectsForClass(activeClassId);
+  }, [activeClassId, loadSubjectsForClass]);
 
   useEffect(() => {
     if (selectedSubjectId) {

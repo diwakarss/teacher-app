@@ -3,7 +3,6 @@ import type { QuestionPaper, NewQuestionPaper } from '@/lib/db/schema';
 import type {
   QuestionPaperOutput,
   Section,
-  QuestionPaperPromptInput,
 } from '@/lib/prompts/question-paper-prompt';
 import {
   parseQuestionPaperResponse,

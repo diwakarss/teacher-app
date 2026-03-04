@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,24 +40,26 @@ export default function MarksPage() {
   }, [loadClasses]);
 
   // Load subjects when class changes
-  useEffect(() => {
-    if (!activeClassId) {
+  const loadSubjectsForClass = useCallback(async (classId: string | null) => {
+    if (!classId) {
       setSubjects([]);
       setSelectedSubjectId('');
       return;
     }
 
     setLoadingSubjects(true);
-    subjectService
-      .getByClassId(activeClassId)
-      .then((subjs) => {
-        setSubjects(subjs);
-        if (subjs.length > 0 && !selectedSubjectId) {
-          setSelectedSubjectId(subjs[0].id);
-        }
-      })
-      .finally(() => setLoadingSubjects(false));
-  }, [activeClassId]);
+    try {
+      const subjs = await subjectService.getByClassId(classId);
+      setSubjects(subjs);
+      setSelectedSubjectId((prev) => (subjs.length > 0 && !prev ? subjs[0].id : prev));
+    } finally {
+      setLoadingSubjects(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSubjectsForClass(activeClassId);
+  }, [activeClassId, loadSubjectsForClass]);
 
   // Load assessments when subject changes
   useEffect(() => {
@@ -69,13 +71,17 @@ export default function MarksPage() {
     loadAssessments(selectedSubjectId);
   }, [selectedSubjectId, loadAssessments]);
 
-  // Auto-select first assessment
+  // Auto-select first assessment when assessments change
   useEffect(() => {
-    if (assessments.length > 0 && !selectedAssessmentId) {
-      setSelectedAssessmentId(assessments[0].id);
-    } else if (assessments.length === 0) {
-      setSelectedAssessmentId('');
-    }
+    setSelectedAssessmentId((prev) => {
+      if (assessments.length > 0 && !prev) {
+        return assessments[0].id;
+      }
+      if (assessments.length === 0) {
+        return '';
+      }
+      return prev;
+    });
   }, [assessments]);
 
   if (!activeClassId) {

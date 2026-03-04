@@ -13,9 +13,9 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Save, Loader2 } from 'lucide-react';
-import { useMarksStore, type MarkWithStudent } from '@/stores/marks-store';
+import { useMarksStore } from '@/stores/marks-store';
 import { useStudentStore } from '@/stores/student-store';
-import type { Assessment, Student } from '@/lib/db/schema';
+import type { Assessment } from '@/lib/db/schema';
 import { calculateIGCSEGrade, getGradeColor } from '@/services/marks-service';
 import { toast } from 'sonner';
 

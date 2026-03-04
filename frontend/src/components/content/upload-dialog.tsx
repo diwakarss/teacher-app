@@ -497,7 +497,7 @@ export function UploadDialog({ open, onOpenChange, subjectId }: UploadDialogProp
                 <div className="text-yellow-800 flex-1">
                   <p className="font-medium">Image-based PDF detected</p>
                   <p className="text-yellow-700 mb-2">
-                    This PDF doesn't have embedded text. Would you like to run OCR to extract text from the images?
+                    This PDF does not have embedded text. Would you like to run OCR to extract text from the images?
                   </p>
                   <Button
                     size="sm"

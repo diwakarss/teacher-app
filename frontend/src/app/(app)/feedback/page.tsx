@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -71,22 +71,24 @@ export default function FeedbackPage() {
   }, [loadClasses]);
 
   // Load subjects when class changes
-  useEffect(() => {
-    if (!activeClassId) {
+  const loadSubjectsForClass = useCallback(async (classId: string | null) => {
+    if (!classId) {
       setSubjects([]);
       setSelectedSubjectId('');
       return;
     }
 
-    subjectService.getByClassId(activeClassId).then((subjs) => {
-      setSubjects(subjs);
-      if (subjs.length > 0) {
-        setSelectedSubjectId(subjs[0].id);
-      }
-    });
+    const subjs = await subjectService.getByClassId(classId);
+    setSubjects(subjs);
+    setSelectedSubjectId((prev) => (subjs.length > 0 && !prev ? subjs[0].id : prev));
+  }, []);
 
-    loadStudents(activeClassId);
-  }, [activeClassId, loadStudents]);
+  useEffect(() => {
+    if (activeClassId) {
+      loadSubjectsForClass(activeClassId);
+      loadStudents(activeClassId);
+    }
+  }, [activeClassId, loadStudents, loadSubjectsForClass]);
 
   // Load assessments when subject changes
   useEffect(() => {
@@ -94,11 +96,14 @@ export default function FeedbackPage() {
     loadAssessments(selectedSubjectId);
   }, [selectedSubjectId, loadAssessments]);
 
-  // Auto-select first assessment and load marks
+  // Auto-select first assessment when assessments change
   useEffect(() => {
-    if (assessments.length > 0 && !selectedAssessmentId) {
-      setSelectedAssessmentId(assessments[0].id);
-    }
+    setSelectedAssessmentId((prev) => {
+      if (assessments.length > 0 && !prev) {
+        return assessments[0].id;
+      }
+      return prev;
+    });
   }, [assessments]);
 
   // Load marks and feedbacks when assessment changes

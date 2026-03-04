@@ -2,15 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, ClipboardList, BookOpen, FileText, Sparkles } from 'lucide-react';
+import { Home, ClipboardList, BookOpen, Sparkles, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/classes', label: 'Classes', icon: BookOpen },
-  { href: '/students', label: 'Students', icon: Users },
   { href: '/marks', label: 'Marks', icon: ClipboardList },
   { href: '/generate', label: 'Generate', icon: Sparkles },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function BottomNav() {

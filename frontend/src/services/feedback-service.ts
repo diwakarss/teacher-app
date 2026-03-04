@@ -1,7 +1,6 @@
 import { getDb, persistDb } from '@/lib/db/database';
 import type { Feedback, NewFeedback } from '@/lib/db/schema';
 import { v4 as uuid } from 'uuid';
-import { calculateIGCSEGrade } from './marks-service';
 
 export type FeedbackTone = 'encouraging' | 'neutral' | 'serious';
 export type PerformanceLevel = 'excellent' | 'good' | 'average' | 'needsWork' | 'struggling';
