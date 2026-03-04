@@ -53,66 +53,43 @@ export function getPerformanceLevelColor(level: PerformanceLevel): string {
   }
 }
 
-// Generate feedback using Claude API
+// Generate feedback using AWS Bedrock via server-side API
 export async function generateFeedbackWithAI(
   performance: StudentPerformance,
-  tone: FeedbackTone,
-  apiKey: string
+  tone: FeedbackTone
 ): Promise<string> {
-  const toneInstructions = {
-    encouraging: 'Use a warm, supportive, and encouraging tone. Focus on positives and frame areas for improvement constructively.',
-    neutral: 'Use a balanced, factual tone. Present both achievements and areas for improvement objectively.',
-    serious: 'Use a direct, action-focused tone. Be clear about concerns and specific about what needs to be done.',
-  };
-
-  const trendDescription = {
-    improving: 'showing improvement',
-    stable: 'maintaining consistent performance',
-    declining: 'showing a decline in performance',
-    unknown: '',
-  };
-
-  const prompt = `Generate a brief parent feedback message (2-3 sentences) for a student.
-
-Student: ${performance.studentName}
-Subject: ${performance.subjectName}
-Assessment: ${performance.assessmentName}
-Score: ${performance.currentMarks}/${performance.maxMarks} (${performance.percentage.toFixed(0)}%)
-Grade: ${performance.grade}
-Class Average: ${performance.classAverage.toFixed(0)}%
-Performance: ${performance.performanceLevel}${performance.trend !== 'unknown' ? `, ${trendDescription[performance.trend]}` : ''}
-
-${toneInstructions[tone]}
-
-Write the message as if addressing "Dear Parent" and sign off as "Class Teacher". Keep it concise and actionable. Do not use markdown formatting.`;
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch('/api/generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 256,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
+      type: 'feedback',
+      studentName: performance.studentName,
+      subjectName: performance.subjectName,
+      assessmentName: performance.assessmentName,
+      marksObtained: performance.currentMarks,
+      maxMarks: performance.maxMarks,
+      percentage: performance.percentage,
+      grade: performance.grade,
+      classAverage: performance.classAverage,
+      performanceLevel: performance.performanceLevel,
+      trend: performance.trend,
+      tone,
     }),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error?.message || 'Failed to generate feedback');
+    throw new Error(error.error || 'Failed to generate feedback');
   }
 
   const data = await response.json();
-  return data.content[0].text;
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to generate feedback');
+  }
+
+  return data.content;
 }
 
 // Generate feedback using templates (fallback when no API key)

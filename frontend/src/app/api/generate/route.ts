@@ -28,7 +28,51 @@ function createBedrockClient(): BedrockRuntimeClient {
 // Claude 3.5 Haiku is faster and more capable than Claude 3 Haiku
 const MODEL_ID = 'us.anthropic.claude-3-5-haiku-20241022-v1:0';
 
-export type GenerationType = 'lesson_plan' | 'question_paper';
+function buildFeedbackPrompt(req: FeedbackRequest): string {
+  const toneInstructions = {
+    encouraging: 'Use a warm, supportive, and encouraging tone. Focus on positives and frame areas for improvement constructively.',
+    neutral: 'Use a balanced, factual tone. Present both achievements and areas for improvement objectively.',
+    serious: 'Use a direct, action-focused tone. Be clear about concerns and specific about what needs to be done.',
+  };
+
+  const trendDescription: Record<string, string> = {
+    improving: 'showing improvement',
+    stable: 'maintaining consistent performance',
+    declining: 'showing a decline in performance',
+    unknown: '',
+  };
+
+  return `Generate a brief parent feedback message (2-3 sentences) for a student.
+
+Student: ${req.studentName}
+Subject: ${req.subjectName}
+Assessment: ${req.assessmentName}
+Score: ${req.marksObtained}/${req.maxMarks} (${req.percentage.toFixed(0)}%)
+Grade: ${req.grade}
+Class Average: ${req.classAverage.toFixed(0)}%
+Performance: ${req.performanceLevel}${req.trend !== 'unknown' ? `, ${trendDescription[req.trend]}` : ''}
+
+${toneInstructions[req.tone]}
+
+Write the message as if addressing "Dear Parent" and sign off as "Class Teacher". Keep it concise and actionable. Do not use markdown formatting.`;
+}
+
+export type GenerationType = 'lesson_plan' | 'question_paper' | 'feedback';
+
+export interface FeedbackRequest {
+  type: 'feedback';
+  studentName: string;
+  subjectName: string;
+  assessmentName: string;
+  marksObtained: number;
+  maxMarks: number;
+  percentage: number;
+  grade: string;
+  classAverage: number;
+  performanceLevel: string;
+  trend: string;
+  tone: 'encouraging' | 'neutral' | 'serious';
+}
 
 export interface LessonPlanRequest {
   type: 'lesson_plan';
@@ -54,7 +98,7 @@ export interface QuestionPaperRequest {
   };
 }
 
-export type GenerateRequest = LessonPlanRequest | QuestionPaperRequest;
+export type GenerateRequest = LessonPlanRequest | QuestionPaperRequest | FeedbackRequest;
 
 export interface GenerateResponse {
   success: boolean;
@@ -89,7 +133,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<GenerateR
     const client = createBedrockClient();
     let prompt: string;
 
-    if (body.type === 'lesson_plan') {
+    if (body.type === 'feedback') {
+      prompt = buildFeedbackPrompt(body);
+    } else if (body.type === 'lesson_plan') {
       prompt = buildLessonPlanPrompt({
         chapterContent: body.chapterContent,
         chapterName: body.chapterName,

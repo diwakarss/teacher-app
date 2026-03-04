@@ -19,9 +19,7 @@ interface FeedbackState {
   loading: boolean;
   generating: boolean;
   error: string | null;
-  apiKey: string | null;
   useAI: boolean;
-  setApiKey: (key: string | null) => void;
   setUseAI: (useAI: boolean) => void;
   loadFeedbacks: (assessmentId: string) => Promise<void>;
   generateFeedback: (
@@ -45,10 +43,8 @@ export const useFeedbackStore = create<FeedbackState>()(
       loading: false,
       generating: false,
       error: null,
-      apiKey: null,
       useAI: false,
 
-      setApiKey: (key) => set({ apiKey: key }),
       setUseAI: (useAI) => set({ useAI }),
 
       loadFeedbacks: async (assessmentId: string) => {
@@ -64,13 +60,13 @@ export const useFeedbackStore = create<FeedbackState>()(
       },
 
       generateFeedback: async (performance, tone, assessmentId) => {
-        const { apiKey, useAI } = get();
+        const { useAI } = get();
 
         let message: string;
 
-        if (useAI && apiKey) {
+        if (useAI) {
           try {
-            message = await generateFeedbackWithAI(performance, tone, apiKey);
+            message = await generateFeedbackWithAI(performance, tone);
           } catch (error) {
             console.warn('AI generation failed, falling back to template:', error);
             message = generateFeedbackFromTemplate(performance, tone);
@@ -114,7 +110,7 @@ export const useFeedbackStore = create<FeedbackState>()(
             onProgress?.(i + 1, performances.length);
 
             // Small delay to avoid rate limiting if using AI
-            if (get().useAI && get().apiKey) {
+            if (get().useAI) {
               await new Promise((r) => setTimeout(r, 200));
             }
           }
@@ -145,7 +141,6 @@ export const useFeedbackStore = create<FeedbackState>()(
     {
       name: 'teacher-app-feedback',
       partialize: (state) => ({
-        apiKey: state.apiKey,
         useAI: state.useAI,
       }),
     }

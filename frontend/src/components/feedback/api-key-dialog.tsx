@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,12 +9,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useFeedbackStore } from '@/stores/feedback-store';
 import { toast } from 'sonner';
-import { Key, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 interface ApiKeyDialogProps {
   open: boolean;
@@ -23,26 +21,11 @@ interface ApiKeyDialogProps {
 }
 
 export function ApiKeyDialog({ open, onOpenChange }: ApiKeyDialogProps) {
-  const { apiKey, useAI, setApiKey, setUseAI } = useFeedbackStore();
-  const [key, setKey] = useState(apiKey || '');
+  const { useAI, setUseAI } = useFeedbackStore();
 
   const handleSave = () => {
-    if (useAI && !key.trim()) {
-      toast.error('Please enter an API key or disable AI feedback');
-      return;
-    }
-
-    setApiKey(key.trim() || null);
     toast.success(useAI ? 'AI feedback enabled' : 'Using template feedback');
     onOpenChange(false);
-  };
-
-  const handleToggleAI = (checked: boolean) => {
-    setUseAI(checked);
-    if (!checked) {
-      setKey('');
-      setApiKey(null);
-    }
   };
 
   return (
@@ -54,7 +37,7 @@ export function ApiKeyDialog({ open, onOpenChange }: ApiKeyDialogProps) {
             AI Feedback Settings
           </DialogTitle>
           <DialogDescription>
-            Enable AI-powered feedback generation using Claude API for more personalized messages.
+            Enable AI-powered feedback generation for more personalized messages.
           </DialogDescription>
         </DialogHeader>
 
@@ -63,43 +46,15 @@ export function ApiKeyDialog({ open, onOpenChange }: ApiKeyDialogProps) {
             <div className="space-y-0.5">
               <Label htmlFor="use-ai">Use AI Feedback</Label>
               <p className="text-sm text-gray-500">
-                Generate personalized feedback with Claude
+                Generate personalized feedback with AI
               </p>
             </div>
             <Switch
               id="use-ai"
               checked={useAI}
-              onCheckedChange={handleToggleAI}
+              onCheckedChange={setUseAI}
             />
           </div>
-
-          {useAI && (
-            <div className="space-y-2">
-              <Label htmlFor="api-key" className="flex items-center gap-2">
-                <Key className="h-4 w-4" />
-                Claude API Key
-              </Label>
-              <Input
-                id="api-key"
-                type="password"
-                placeholder="sk-ant-..."
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-              />
-              <p className="text-xs text-gray-500">
-                Your API key is stored locally and never sent to our servers.
-                Get one at{' '}
-                <a
-                  href="https://console.anthropic.com/settings/keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  console.anthropic.com
-                </a>
-              </p>
-            </div>
-          )}
 
           {!useAI && (
             <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
@@ -107,6 +62,16 @@ export function ApiKeyDialog({ open, onOpenChange }: ApiKeyDialogProps) {
               <p className="mt-1">
                 Feedback will be generated using predefined templates based on student performance.
                 Enable AI mode for more personalized messages.
+              </p>
+            </div>
+          )}
+
+          {useAI && (
+            <div className="rounded-lg bg-purple-50 p-4 text-sm text-purple-700">
+              <p className="font-medium">AI Mode</p>
+              <p className="mt-1">
+                Personalized feedback will be generated using AWS Bedrock.
+                Each message is tailored to the student&apos;s performance.
               </p>
             </div>
           )}
