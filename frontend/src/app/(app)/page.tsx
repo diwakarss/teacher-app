@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Users, BookOpen, ClipboardList, Sparkles } from 'lucide-react';
+import { Users, BookOpen, MessageSquare, FileUp } from 'lucide-react';
 import { useAppStore } from '@/stores/app-store';
 import { useClassStore } from '@/stores/class-store';
 import { initializeDb } from '@/lib/db/database';
@@ -149,18 +149,10 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* Quick Actions */}
+      {/* Quick Actions - links not in bottom nav */}
       <div>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">Quick Actions</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Link
-            href="/classes"
-            className="flex cursor-pointer flex-col items-center gap-2 rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md"
-          >
-            <BookOpen className="h-8 w-8 text-primary" />
-            <span className="text-sm font-medium text-gray-700">Classes</span>
-          </Link>
-
           <Link
             href="/students"
             className="flex cursor-pointer flex-col items-center gap-2 rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md"
@@ -170,19 +162,27 @@ export default function DashboardPage() {
           </Link>
 
           <Link
-            href="/marks"
+            href="/feedback"
             className="flex cursor-pointer flex-col items-center gap-2 rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md"
           >
-            <ClipboardList className="h-8 w-8 text-primary" />
-            <span className="text-sm font-medium text-gray-700">Marks</span>
+            <MessageSquare className="h-8 w-8 text-primary" />
+            <span className="text-sm font-medium text-gray-700">Feedback</span>
           </Link>
 
           <Link
-            href="/generate"
+            href="/content"
             className="flex cursor-pointer flex-col items-center gap-2 rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md"
           >
-            <Sparkles className="h-8 w-8 text-primary" />
-            <span className="text-sm font-medium text-gray-700">Generate</span>
+            <FileUp className="h-8 w-8 text-primary" />
+            <span className="text-sm font-medium text-gray-700">Content</span>
+          </Link>
+
+          <Link
+            href="/classes"
+            className="flex cursor-pointer flex-col items-center gap-2 rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md"
+          >
+            <BookOpen className="h-8 w-8 text-primary" />
+            <span className="text-sm font-medium text-gray-700">Manage Classes</span>
           </Link>
         </div>
       </div>
