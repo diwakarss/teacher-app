@@ -1,0 +1,11 @@
+# OS files
+.DS_Store
+
+# Cache files
+.agent-cache.json
+.planning/codebase/.mapper-cache.json
+
+# Environment
+.env
+.env.local
+.env*.local
