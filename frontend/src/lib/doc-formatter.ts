@@ -51,6 +51,8 @@ export interface ParsedElement {
   type: 'heading' | 'paragraph' | 'list-item';
   level?: number; // for headings (1-6)
   text: string;
+  keepWithNext?: boolean; // keep this element on same page as next
+  keepTogether?: boolean; // keep all lines of this element together
 }
 
 const DEFAULT_RULES: FormattingRules = {
@@ -128,7 +130,63 @@ function parseHtmlToElements(html: string): ParsedElement[] {
     }
   }
 
+  // Apply pagination control for NOTE sections and signature blocks
+  applyPaginationControl(elements);
+
   return elements;
+}
+
+/**
+ * Mark elements that should stay together on the same page.
+ * - NOTE: sections should be kept together
+ * - Signature blocks (name + title patterns) should stay with preceding content
+ */
+function applyPaginationControl(elements: ParsedElement[]): void {
+  const noteStartPattern = /^NOTE:?$/i;
+  const signaturePatterns = [
+    /^[A-Z][a-z]+\s+[A-Z][a-z]+$/, // Name pattern: "Nidhi Cherian"
+    /^Head\s+of\s+/i, // "Head of School"
+    /^Principal$/i,
+    /^Director$/i,
+    /^Coordinator$/i,
+  ];
+
+  let inNoteSection = false;
+
+  for (let i = 0; i < elements.length; i++) {
+    const text = elements[i].text.trim();
+
+    // Check if this is the start of a NOTE section
+    if (noteStartPattern.test(text)) {
+      inNoteSection = true;
+      elements[i].keepTogether = true;
+      elements[i].keepWithNext = true; // NOTE header stays with its content
+      continue;
+    }
+
+    // Check if this looks like a signature block (end of notes)
+    const isSignature = signaturePatterns.some((p) => p.test(text));
+
+    if (inNoteSection) {
+      // Keep all elements in the NOTE section together
+      if (i < elements.length - 1) {
+        elements[i].keepWithNext = true;
+      }
+      elements[i].keepTogether = true;
+
+      // Signature block ends the NOTE section but should be kept with it
+      if (isSignature) {
+        // Check if next element is also part of signature (title, school name)
+        const nextIsAlsoSignature =
+          i + 1 < elements.length &&
+          signaturePatterns.some((p) => p.test(elements[i + 1].text.trim()));
+
+        if (!nextIsAlsoSignature) {
+          inNoteSection = false;
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -141,6 +199,12 @@ export async function applyFormatting(
   const children: Paragraph[] = [];
 
   for (const element of parsed.elements) {
+    // Common pagination control options
+    const paginationOptions = {
+      ...(element.keepWithNext && { keepNext: true }),
+      ...(element.keepTogether && { keepLines: true }),
+    };
+
     if (element.type === 'heading') {
       children.push(
         new Paragraph({
@@ -154,6 +218,7 @@ export async function applyFormatting(
           ],
           heading: getHeadingLevel(element.level || 1),
           spacing: { after: 200, line: rules.lineSpacing * 240 },
+          ...paginationOptions,
         })
       );
     } else if (element.type === 'list-item') {
@@ -168,6 +233,7 @@ export async function applyFormatting(
           ],
           spacing: { after: 120, line: rules.lineSpacing * 240 },
           indent: { left: convertInchesToTwip(0.5) },
+          ...paginationOptions,
         })
       );
     } else {
@@ -182,6 +248,7 @@ export async function applyFormatting(
           ],
           alignment: getAlignment(rules.alignment),
           spacing: { after: 200, line: rules.lineSpacing * 240 },
+          ...paginationOptions,
         })
       );
     }
