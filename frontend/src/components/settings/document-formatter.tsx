@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -29,6 +30,7 @@ import {
   Trash2,
   Plus,
   Save,
+  Table2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -43,6 +45,8 @@ import {
   type FormattingPreset,
   type FormattingRules,
 } from '@/lib/doc-formatter';
+import { formatTables } from '@/lib/table-formatter';
+import { saveAs } from 'file-saver';
 import { v4 as uuid } from 'uuid';
 
 const FONTS = [
@@ -71,6 +75,7 @@ export function DocumentFormatter() {
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
+  const [autoFormatTables, setAutoFormatTables] = useState(false);
 
   const selectedPreset = presets.find((p) => p.id === selectedPresetId);
 
@@ -127,14 +132,30 @@ export function DocumentFormatter() {
   };
 
   const handleFormat = async () => {
-    if (!parsed) return;
+    if (!parsed || !file) return;
 
     setFormatting(true);
     try {
-      const blob = await applyFormatting(parsed, customRules);
-      const filename = file?.name.replace('.docx', '_formatted.docx') || 'formatted.docx';
-      downloadDocument(blob, filename);
-      toast.success('Document formatted and downloaded');
+      let resultBlob: Blob;
+      const filename = file.name.replace('.docx', '_formatted.docx') || 'formatted.docx';
+
+      if (autoFormatTables) {
+        // Use table formatter which preserves original content and only modifies table properties
+        const result = await formatTables(file);
+        resultBlob = result.blob;
+
+        if (result.tablesFound === 0) {
+          toast.info('No tables found in document');
+        } else {
+          toast.success(`Formatted ${result.tablesFormatted} table(s)`);
+        }
+      } else {
+        // Use standard text-based formatting
+        resultBlob = await applyFormatting(parsed, customRules);
+        toast.success('Document formatted and downloaded');
+      }
+
+      saveAs(resultBlob, filename);
     } catch (error) {
       console.error('Format error:', error);
       toast.error('Failed to format document');
@@ -462,6 +483,33 @@ export function DocumentFormatter() {
                   value={customRules.margins.right}
                   onChange={(e) => handleMarginChange('right', parseFloat(e.target.value) || 0)}
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Table Formatting */}
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Table2 className="h-4 w-4 text-muted-foreground" />
+              <Label className="text-sm font-medium">Table Formatting</Label>
+            </div>
+            <div className="flex items-start space-x-3">
+              <Checkbox
+                id="auto-format-tables"
+                checked={autoFormatTables}
+                onCheckedChange={(checked) => setAutoFormatTables(checked === true)}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <label
+                  htmlFor="auto-format-tables"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Auto-format tables
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Apply fixed column widths and top vertical alignment to lesson plan tables.
+                  Preserves all text content, fonts, and borders.
+                </p>
               </div>
             </div>
           </div>
