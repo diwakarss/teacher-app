@@ -151,7 +151,7 @@ export async function runMigrations(db: Database): Promise<void> {
       total_marks INTEGER NOT NULL,
       duration INTEGER NOT NULL,
       difficulty TEXT NOT NULL CHECK (difficulty IN ('easy', 'medium', 'hard', 'mixed')),
-      template TEXT NOT NULL CHECK (template IN ('unit_test', 'monthly_test', 'term_exam', 'custom')),
+      template TEXT NOT NULL CHECK (template IN ('unit_test', 'monthly_test', 'term_exam', 'custom', 'ct', 'mtpt', 'ftpt')),
       sections TEXT NOT NULL,
       answer_key TEXT NOT NULL,
       created_at TEXT NOT NULL,
@@ -186,6 +186,38 @@ export async function runMigrations(db: Database): Promise<void> {
   )`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_chapter_pages_chapter_id ON chapter_pages(chapter_id)`);
   db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_chapter_pages_unique ON chapter_pages(chapter_id, page_number)`);
+
+  // Migration: expand template CHECK constraint to include new paper formats (ct, mtpt, ftpt)
+  // SQLite doesn't support ALTER CHECK, so recreate the table if needed
+  try {
+    // Test if new values are accepted
+    db.run(`INSERT INTO question_papers (id, subject_id, chapter_ids, name, total_marks, duration, difficulty, template, sections, answer_key, created_at, updated_at)
+            VALUES ('__migration_test__', 'test', '[]', 'test', 0, 0, 'easy', 'ct', '[]', '[]', '', '')`);
+    db.run(`DELETE FROM question_papers WHERE id = '__migration_test__'`);
+  } catch {
+    // Constraint rejects 'ct' — recreate the table
+    db.run(`ALTER TABLE question_papers RENAME TO question_papers_old`);
+    db.run(`
+      CREATE TABLE question_papers (
+        id TEXT PRIMARY KEY,
+        subject_id TEXT NOT NULL,
+        chapter_ids TEXT NOT NULL,
+        name TEXT NOT NULL,
+        total_marks INTEGER NOT NULL,
+        duration INTEGER NOT NULL,
+        difficulty TEXT NOT NULL CHECK (difficulty IN ('easy', 'medium', 'hard', 'mixed')),
+        template TEXT NOT NULL CHECK (template IN ('unit_test', 'monthly_test', 'term_exam', 'custom', 'ct', 'mtpt', 'ftpt')),
+        sections TEXT NOT NULL,
+        answer_key TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+      )
+    `);
+    db.run(`INSERT INTO question_papers SELECT * FROM question_papers_old`);
+    db.run(`DROP TABLE question_papers_old`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_question_papers_subject_id ON question_papers(subject_id)`);
+  }
 
   await persistDb();
 }
