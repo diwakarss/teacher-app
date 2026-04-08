@@ -114,6 +114,21 @@ export type NewFeedback = typeof feedback.$inferInsert;
 export type Chapter = typeof chapters.$inferSelect;
 export type NewChapter = typeof chapters.$inferInsert;
 
+export const chapterPages = sqliteTable('chapter_pages', {
+  id: text('id').primaryKey(),
+  chapterId: text('chapter_id')
+    .notNull()
+    .references(() => chapters.id, { onDelete: 'cascade' }),
+  pageNumber: integer('page_number').notNull(),
+  extraction: text('extraction').notNull(),
+  teacherCorrections: text('teacher_corrections'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export type ChapterPage = typeof chapterPages.$inferSelect;
+export type NewChapterPage = typeof chapterPages.$inferInsert;
+
 export const lessonPlans = sqliteTable('lesson_plans', {
   id: text('id').primaryKey(),
   chapterId: text('chapter_id')

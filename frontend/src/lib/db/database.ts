@@ -173,6 +173,20 @@ export async function runMigrations(db: Database): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_question_papers_subject_id ON question_papers(subject_id);
   `);
 
+  // Vision scanning: chapter_pages table
+  db.run(`CREATE TABLE IF NOT EXISTS chapter_pages (
+    id TEXT PRIMARY KEY,
+    chapter_id TEXT NOT NULL,
+    page_number INTEGER NOT NULL,
+    extraction TEXT NOT NULL,
+    teacher_corrections TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_chapter_pages_chapter_id ON chapter_pages(chapter_id)`);
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_chapter_pages_unique ON chapter_pages(chapter_id, page_number)`);
+
   await persistDb();
 }
 

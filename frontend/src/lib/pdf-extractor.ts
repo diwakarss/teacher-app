@@ -26,8 +26,39 @@ async function getPdfJs() {
   return pdfjsLib;
 }
 
-// Store the loaded PDF document for potential re-rendering
+// Module-scope cached PDF document (managed by pdf-session-store metadata)
 let cachedPdf: import('pdfjs-dist').PDFDocumentProxy | null = null;
+
+/**
+ * Load a PDF file into the module-scope cache.
+ * Returns the total page count.
+ */
+export async function loadPdf(file: File): Promise<number> {
+  const pdfjs = await getPdfJs();
+
+  // Destroy previous cached PDF if any
+  if (cachedPdf) {
+    cachedPdf.destroy();
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  cachedPdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+  return cachedPdf.numPages;
+}
+
+/**
+ * Check if a PDF is currently loaded in cache
+ */
+export function isPdfLoaded(): boolean {
+  return cachedPdf !== null;
+}
+
+/**
+ * Get total page count of the cached PDF
+ */
+export function getCachedPageCount(): number {
+  return cachedPdf?.numPages ?? 0;
+}
 
 export async function extractTextFromPDF(
   file: File,
@@ -38,7 +69,7 @@ export async function extractTextFromPDF(
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
 
-  // Cache for potential OCR fallback
+  // Cache for reuse
   cachedPdf = pdf;
 
   const totalPages = pdf.numPages;
@@ -84,10 +115,8 @@ export async function extractTextFromPDF(
 }
 
 function checkHasTextLayer(text: string, pageCount: number): boolean {
-  // If total text length is very short relative to page count,
-  // the PDF likely doesn't have an embedded text layer
   const avgCharsPerPage = text.length / pageCount;
-  return avgCharsPerPage > 50; // Threshold: at least 50 chars per page average
+  return avgCharsPerPage > 50;
 }
 
 export function hasTextLayer(result: PDFExtractionResult): boolean {
@@ -95,13 +124,15 @@ export function hasTextLayer(result: PDFExtractionResult): boolean {
 }
 
 /**
- * Render PDF pages to images for OCR fallback
- * Returns array of Blob images
+ * Render a range of PDF pages to JPEG images.
+ * Uses sequential render-and-release to minimize canvas memory pressure on mobile.
  */
 export async function renderPdfPagesToImages(
   file?: File,
   onProgress?: (progress: PDFExtractionProgress) => void,
-  scale: number = 2.0 // Higher scale = better OCR accuracy
+  scale: number = 2.0,
+  startPage?: number,
+  endPage?: number
 ): Promise<Blob[]> {
   const pdfjs = await getPdfJs();
 
@@ -114,13 +145,17 @@ export async function renderPdfPagesToImages(
   }
 
   if (!pdf) {
-    throw new Error('No PDF loaded. Call extractTextFromPDF first or provide a file.');
+    throw new Error('No PDF loaded. Call loadPdf first or provide a file.');
   }
 
   const totalPages = pdf.numPages;
+  const start = Math.max(1, startPage ?? 1);
+  const end = Math.min(totalPages, endPage ?? totalPages);
+  const pageCount = end - start + 1;
+
   const images: Blob[] = [];
 
-  for (let i = 1; i <= totalPages; i++) {
+  for (let i = start; i <= end; i++) {
     const page = await pdf.getPage(i);
     const viewport = page.getViewport({ scale });
 
@@ -140,31 +175,81 @@ export async function renderPdfPagesToImages(
       viewport,
     }).promise;
 
-    // Convert canvas to blob
+    // Convert canvas to JPEG blob (smaller than PNG for vision API)
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
         (b) => {
           if (b) resolve(b);
           else reject(new Error('Failed to create blob from canvas'));
         },
-        'image/png',
-        0.95
+        'image/jpeg',
+        0.8
       );
     });
+
+    // Release canvas memory immediately (prevents OOM on mobile)
+    canvas.width = 0;
+    canvas.height = 0;
 
     images.push(blob);
 
     if (onProgress) {
       onProgress({
-        currentPage: i,
-        totalPages,
-        percentage: Math.round((i / totalPages) * 100),
+        currentPage: i - start + 1,
+        totalPages: pageCount,
+        percentage: Math.round(((i - start + 1) / pageCount) * 100),
         phase: 'rendering',
       });
     }
   }
 
   return images;
+}
+
+/**
+ * Render a single page to a JPEG data URL for preview display
+ */
+export async function renderPageToDataUrl(
+  pageNumber: number,
+  scale: number = 1.5
+): Promise<string> {
+  if (!cachedPdf) {
+    throw new Error('No PDF loaded. Call loadPdf first.');
+  }
+
+  const page = await cachedPdf.getPage(pageNumber);
+  const viewport = page.getViewport({ scale });
+
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Failed to get canvas context');
+  }
+
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({ canvasContext: context, viewport }).promise;
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+  // Release canvas
+  canvas.width = 0;
+  canvas.height = 0;
+
+  return dataUrl;
+}
+
+/**
+ * Render a single page to a base64 string (no data: prefix) for API calls
+ */
+export async function renderPageToBase64(
+  pageNumber: number,
+  scale: number = 2.0
+): Promise<string> {
+  const dataUrl = await renderPageToDataUrl(pageNumber, scale);
+  // Strip "data:image/jpeg;base64," prefix
+  return dataUrl.split(',')[1];
 }
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useReducer, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,20 +11,23 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Upload, AlertCircle, Camera, ImageIcon, X } from 'lucide-react';
+import { FileText, Upload, Loader2 } from 'lucide-react';
 import { useContentStore } from '@/stores/content-store';
+import { usePdfSessionStore } from '@/stores/pdf-session-store';
 import {
-  extractTextFromPDF,
-  hasTextLayer,
-  renderPdfPagesToImages,
-  clearPdfCache,
-  type PDFExtractionProgress,
+  loadPdf,
+  renderPageToDataUrl,
+  renderPageToBase64,
+  isPdfLoaded,
+  getCachedPageCount,
 } from '@/lib/pdf-extractor';
-import { extractTextFromImages, type OCRProgress } from '@/lib/ocr-processor';
 import { suggestChapterName } from '@/lib/chapter-detector';
+import {
+  PageReviewPanel,
+  type PageExtraction,
+  toDisplayString,
+} from '@/components/content/page-review-panel';
 import { toast } from 'sonner';
 
 interface UploadDialogProps {
@@ -33,63 +36,132 @@ interface UploadDialogProps {
   subjectId: string;
 }
 
-type UploadStep = 'select' | 'processing' | 'preview';
-type SourceType = 'pdf' | 'image';
+// State machine for upload flow
+type Step = 'select' | 'range' | 'scanning' | 'reviewing';
+
+interface PageData {
+  pageNumber: number;
+  imageDataUrl: string | null;
+  extraction: PageExtraction | null;
+  scanning: boolean;
+  error: string | null;
+}
+
+interface UploadState {
+  step: Step;
+  chapterName: string;
+  chapterNumber: number;
+  startPage: number;
+  endPage: number;
+  progress: number;
+  progressText: string;
+  pages: PageData[];
+  currentPageIndex: number;
+  saving: boolean;
+}
+
+type UploadAction =
+  | { type: 'SET_STEP'; step: Step }
+  | { type: 'SET_CHAPTER_NAME'; name: string }
+  | { type: 'SET_CHAPTER_NUMBER'; num: number }
+  | { type: 'SET_START_PAGE'; page: number }
+  | { type: 'SET_END_PAGE'; page: number }
+  | { type: 'SET_PROGRESS'; progress: number; text: string }
+  | { type: 'INIT_PAGES'; pages: PageData[] }
+  | { type: 'SET_PAGE_IMAGE'; index: number; dataUrl: string }
+  | { type: 'SET_PAGE_SCANNING'; index: number; scanning: boolean }
+  | { type: 'SET_PAGE_EXTRACTION'; index: number; extraction: PageExtraction }
+  | { type: 'SET_PAGE_ERROR'; index: number; error: string }
+  | { type: 'EDIT_EXTRACTION'; index: number; extraction: PageExtraction }
+  | { type: 'SET_CURRENT_PAGE'; index: number }
+  | { type: 'SET_SAVING'; saving: boolean }
+  | { type: 'RESET' };
+
+const initialState: UploadState = {
+  step: 'select',
+  chapterName: '',
+  chapterNumber: 1,
+  startPage: 1,
+  endPage: 1,
+  progress: 0,
+  progressText: '',
+  pages: [],
+  currentPageIndex: 0,
+  saving: false,
+};
+
+function uploadReducer(state: UploadState, action: UploadAction): UploadState {
+  switch (action.type) {
+    case 'SET_STEP':
+      return { ...state, step: action.step };
+    case 'SET_CHAPTER_NAME':
+      return { ...state, chapterName: action.name };
+    case 'SET_CHAPTER_NUMBER':
+      return { ...state, chapterNumber: action.num };
+    case 'SET_START_PAGE':
+      return { ...state, startPage: action.page };
+    case 'SET_END_PAGE':
+      return { ...state, endPage: action.page };
+    case 'SET_PROGRESS':
+      return { ...state, progress: action.progress, progressText: action.text };
+    case 'INIT_PAGES':
+      return { ...state, pages: action.pages, currentPageIndex: 0 };
+    case 'SET_PAGE_IMAGE': {
+      const pages = [...state.pages];
+      pages[action.index] = { ...pages[action.index], imageDataUrl: action.dataUrl };
+      return { ...state, pages };
+    }
+    case 'SET_PAGE_SCANNING': {
+      const pages = [...state.pages];
+      pages[action.index] = { ...pages[action.index], scanning: action.scanning };
+      return { ...state, pages };
+    }
+    case 'SET_PAGE_EXTRACTION': {
+      const pages = [...state.pages];
+      pages[action.index] = {
+        ...pages[action.index],
+        extraction: action.extraction,
+        scanning: false,
+        error: null,
+      };
+      return { ...state, pages };
+    }
+    case 'SET_PAGE_ERROR': {
+      const pages = [...state.pages];
+      pages[action.index] = {
+        ...pages[action.index],
+        error: action.error,
+        scanning: false,
+      };
+      return { ...state, pages };
+    }
+    case 'EDIT_EXTRACTION': {
+      const pages = [...state.pages];
+      pages[action.index] = { ...pages[action.index], extraction: action.extraction };
+      return { ...state, pages };
+    }
+    case 'SET_CURRENT_PAGE':
+      return { ...state, currentPageIndex: action.index };
+    case 'SET_SAVING':
+      return { ...state, saving: action.saving };
+    case 'RESET':
+      return initialState;
+    default:
+      return state;
+  }
+}
 
 export function UploadDialog({ open, onOpenChange, subjectId }: UploadDialogProps) {
   const { createChapter, getNextChapterNumber } = useContentStore();
+  const { fileName, pageCount, pdfLoaded, setPdfMetadata, clearPdf } = usePdfSessionStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const [step, setStep] = useState<UploadStep>('select');
-  const [progress, setProgress] = useState(0);
-  const [progressText, setProgressText] = useState('');
-  const [sourceType, setSourceType] = useState<SourceType>('pdf');
-
-  const [extractedText, setExtractedText] = useState('');
-  const [pageCount, setPageCount] = useState(1);
-  const [chapterName, setChapterName] = useState('');
-  const [chapterNumber, setChapterNumber] = useState(1);
-  const [saving, setSaving] = useState(false);
-  const [noTextLayerWarning, setNoTextLayerWarning] = useState(false);
-  const [lowConfidenceWarning, setLowConfidenceWarning] = useState(false);
-
-  // Image preview state
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-
-  // PDF OCR fallback state
-  const [pendingOcrFallback, setPendingOcrFallback] = useState(false);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-
-  const resetState = () => {
-    setStep('select');
-    setProgress(0);
-    setProgressText('');
-    setExtractedText('');
-    setPageCount(1);
-    setChapterName('');
-    setChapterNumber(1);
-    setSaving(false);
-    setNoTextLayerWarning(false);
-    setLowConfidenceWarning(false);
-    setSelectedImages([]);
-    setImagePreviews([]);
-    setSourceType('pdf');
-    setPendingOcrFallback(false);
-    setPdfFile(null);
-    clearPdfCache();
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
-    }
-  };
+  const [state, dispatch] = useReducer(uploadReducer, initialState);
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
-      resetState();
+      // Don't clear PDF cache on close (persist across unit creations)
+      dispatch({ type: 'RESET' });
     }
     onOpenChange(newOpen);
   };
@@ -103,447 +175,275 @@ export function UploadDialog({ open, onOpenChange, subjectId }: UploadDialogProp
       return;
     }
 
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error('File size must be under 50MB');
+    if (file.size > 100 * 1024 * 1024) {
+      toast.error('File size must be under 100MB');
       return;
     }
 
-    setPdfFile(file);
-    setSourceType('pdf');
-    setStep('processing');
-    setProgressText('Extracting text from PDF...');
+    dispatch({ type: 'SET_PROGRESS', progress: 0, text: 'Loading PDF...' });
+    dispatch({ type: 'SET_STEP', step: 'scanning' });
 
     try {
-      const result = await extractTextFromPDF(file, (p: PDFExtractionProgress) => {
-        setProgress(p.percentage);
-        setProgressText(`Processing page ${p.currentPage} of ${p.totalPages}...`);
+      const totalPages = await loadPdf(file);
+      setPdfMetadata(file.name, totalPages);
+
+      const nextNumber = await getNextChapterNumber();
+      const suggestion = suggestChapterName('', file.name, nextNumber);
+      dispatch({ type: 'SET_CHAPTER_NAME', name: suggestion.name });
+      dispatch({ type: 'SET_CHAPTER_NUMBER', num: suggestion.chapterNumber });
+      dispatch({ type: 'SET_START_PAGE', page: 1 });
+      dispatch({ type: 'SET_END_PAGE', page: Math.min(totalPages, 30) });
+      dispatch({ type: 'SET_STEP', step: 'range' });
+    } catch (error) {
+      console.error('Failed to load PDF:', error);
+      toast.error('Failed to load PDF. Please try again.');
+      dispatch({ type: 'RESET' });
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleUseCachedPdf = async () => {
+    const nextNumber = await getNextChapterNumber();
+    dispatch({ type: 'SET_CHAPTER_NAME', name: '' });
+    dispatch({ type: 'SET_CHAPTER_NUMBER', num: nextNumber });
+    dispatch({ type: 'SET_START_PAGE', page: 1 });
+    dispatch({ type: 'SET_END_PAGE', page: Math.min(pageCount, 30) });
+    dispatch({ type: 'SET_STEP', step: 'range' });
+  };
+
+  const startScanning = useCallback(async () => {
+    const start = state.startPage;
+    const end = state.endPage;
+    const count = end - start + 1;
+
+    // Initialize page data
+    const pages: PageData[] = [];
+    for (let i = 0; i < count; i++) {
+      pages.push({
+        pageNumber: start + i,
+        imageDataUrl: null,
+        extraction: null,
+        scanning: false,
+        error: null,
       });
-
-      if (!hasTextLayer(result)) {
-        // No text layer detected - offer OCR fallback
-        setNoTextLayerWarning(true);
-        setPendingOcrFallback(true);
-        setPageCount(result.pageCount);
-        setExtractedText('');
-
-        const nextNumber = await getNextChapterNumber();
-        const suggestion = suggestChapterName('', file.name, nextNumber);
-        setChapterName(suggestion.name);
-        setChapterNumber(suggestion.chapterNumber);
-
-        setStep('preview');
-        return;
-      }
-
-      setExtractedText(result.text);
-      setPageCount(result.pageCount);
-
-      const nextNumber = await getNextChapterNumber();
-      const suggestion = suggestChapterName(result.text, file.name, nextNumber);
-      setChapterName(suggestion.name);
-      setChapterNumber(suggestion.chapterNumber);
-
-      setStep('preview');
-    } catch (error) {
-      console.error('Failed to extract text from PDF:', error);
-      toast.error('Failed to process PDF. Please try again.');
-      resetState();
     }
-  };
+    dispatch({ type: 'INIT_PAGES', pages });
+    dispatch({ type: 'SET_STEP', step: 'scanning' });
+    dispatch({ type: 'SET_PROGRESS', progress: 0, text: 'Rendering pages...' });
 
-  const runOcrFallback = async () => {
-    if (!pdfFile) return;
+    // Process pages sequentially: render image → scan with AI → next page
+    for (let i = 0; i < count; i++) {
+      const pageNum = start + i;
 
-    setStep('processing');
-    setProgressText('Rendering PDF pages for OCR...');
-    setProgress(0);
+      try {
+        // Render page image for preview
+        dispatch({
+          type: 'SET_PROGRESS',
+          progress: Math.round(((i * 2) / (count * 2)) * 100),
+          text: `Rendering page ${i + 1} of ${count}...`,
+        });
 
-    try {
-      // Render PDF pages to images
-      const images = await renderPdfPagesToImages(pdfFile, (p) => {
-        setProgress(Math.round(p.percentage * 0.3)); // 0-30% for rendering
-        setProgressText(`Rendering page ${p.currentPage} of ${p.totalPages}...`);
-      });
+        const dataUrl = await renderPageToDataUrl(pageNum, 1.5);
+        dispatch({ type: 'SET_PAGE_IMAGE', index: i, dataUrl });
 
-      setProgressText('Running OCR on rendered pages...');
+        // Get base64 for API (higher resolution)
+        const base64 = await renderPageToBase64(pageNum, 2.0);
 
-      // Run OCR on rendered images
-      const result = await extractTextFromImages(
-        images,
-        (p: OCRProgress & { currentImage: number; totalImages: number }) => {
-          const overallProgress = 30 + Math.round(
-            ((p.currentImage - 1) / p.totalImages) * 70 +
-              (p.progress / p.totalImages) * 0.7
-          );
-          setProgress(overallProgress);
+        // Scan with Claude Vision
+        dispatch({ type: 'SET_PAGE_SCANNING', index: i, scanning: true });
+        dispatch({
+          type: 'SET_PROGRESS',
+          progress: Math.round(((i * 2 + 1) / (count * 2)) * 100),
+          text: `Scanning page ${i + 1} of ${count} with AI...`,
+        });
 
-          if (p.status === 'loading tesseract core') {
-            setProgressText('Loading OCR engine...');
-          } else if (p.status === 'initializing api') {
-            setProgressText('Initializing...');
-          } else if (p.status === 'loading language traineddata') {
-            setProgressText('Loading language data...');
-          } else if (p.status === 'recognizing text') {
-            setProgressText(
-              `OCR: page ${p.currentImage} of ${p.totalImages}...`
-            );
-          } else {
-            setProgressText(`Processing page ${p.currentImage} of ${p.totalImages}...`);
-          }
+        // Auto-advance to show current page being scanned
+        dispatch({ type: 'SET_CURRENT_PAGE', index: i });
+
+        const response = await fetch('/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, pageNumber: pageNum }),
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          dispatch({
+            type: 'SET_PAGE_EXTRACTION',
+            index: i,
+            extraction: result.data,
+          });
+        } else {
+          const errorMsg = result.error || 'Scan failed';
+          dispatch({ type: 'SET_PAGE_ERROR', index: i, error: errorMsg });
+          // Stop on first error (likely a config/model issue that will repeat)
+          toast.error(`Scanning stopped: ${errorMsg}`);
+          break;
         }
-      );
-
-      if (result.confidence < 70) {
-        setLowConfidenceWarning(true);
+      } catch (error) {
+        console.error(`Failed to process page ${pageNum}:`, error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        dispatch({ type: 'SET_PAGE_ERROR', index: i, error: errorMsg });
+        toast.error(`Scanning stopped: ${errorMsg}`);
+        break;
       }
-
-      setExtractedText(result.text);
-      setPendingOcrFallback(false);
-      setNoTextLayerWarning(false);
-      setSourceType('pdf'); // Keep as PDF source type
-
-      // Update chapter name suggestion with actual text
-      const nextNumber = await getNextChapterNumber();
-      const suggestion = suggestChapterName(
-        result.text,
-        pdfFile.name,
-        nextNumber
-      );
-      setChapterName(suggestion.name);
-      setChapterNumber(suggestion.chapterNumber);
-
-      setStep('preview');
-    } catch (error) {
-      console.error('OCR fallback failed:', error);
-      toast.error('OCR processing failed. Please try uploading images directly.');
-      setStep('preview'); // Go back to preview to let user retry or cancel
-    }
-  };
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const imageFiles = Array.from(files).filter((f) =>
-      f.type.startsWith('image/')
-    );
-
-    if (imageFiles.length === 0) {
-      toast.error('Please select image files');
-      return;
     }
 
-    // Check total size (50MB limit for all images)
-    const totalSize = imageFiles.reduce((acc, f) => acc + f.size, 0);
-    if (totalSize > 50 * 1024 * 1024) {
-      toast.error('Total file size must be under 50MB');
-      return;
-    }
+    // Move to review step (even with partial results)
+    dispatch({ type: 'SET_STEP', step: 'reviewing' });
+    dispatch({ type: 'SET_CURRENT_PAGE', index: 0 });
+  }, [state.startPage, state.endPage]);
 
-    // Create previews
-    const previews: string[] = [];
-    imageFiles.forEach((file) => {
-      const url = URL.createObjectURL(file);
-      previews.push(url);
-    });
-
-    setSelectedImages(imageFiles);
-    setImagePreviews(previews);
-  };
-
-  const removeImage = (index: number) => {
-    URL.revokeObjectURL(imagePreviews[index]);
-    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
-    setImagePreviews((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const processImages = async () => {
-    if (selectedImages.length === 0) {
-      toast.error('Please select images first');
-      return;
-    }
-
-    setSourceType('image');
-    setStep('processing');
-    setProgressText('Initializing OCR engine...');
-    setProgress(0);
-
-    try {
-      const result = await extractTextFromImages(
-        selectedImages,
-        (p: OCRProgress & { currentImage: number; totalImages: number }) => {
-          const overallProgress = Math.round(
-            ((p.currentImage - 1) / p.totalImages) * 100 +
-              (p.progress / p.totalImages)
-          );
-          setProgress(overallProgress);
-
-          if (p.status === 'loading tesseract core') {
-            setProgressText('Loading OCR engine...');
-          } else if (p.status === 'initializing api') {
-            setProgressText('Initializing...');
-          } else if (p.status === 'loading language traineddata') {
-            setProgressText('Loading language data...');
-          } else if (p.status === 'recognizing text') {
-            setProgressText(
-              `Recognizing text: image ${p.currentImage} of ${p.totalImages}...`
-            );
-          } else {
-            setProgressText(`Processing image ${p.currentImage} of ${p.totalImages}...`);
-          }
-        }
-      );
-
-      if (result.confidence < 70) {
-        setLowConfidenceWarning(true);
-      }
-
-      setExtractedText(result.text);
-      setPageCount(selectedImages.length);
-
-      const nextNumber = await getNextChapterNumber();
-      const suggestion = suggestChapterName(
-        result.text,
-        selectedImages[0]?.name || 'image',
-        nextNumber
-      );
-      setChapterName(suggestion.name);
-      setChapterNumber(suggestion.chapterNumber);
-
-      // Clean up previews
-      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
-      setImagePreviews([]);
-
-      setStep('preview');
-    } catch (error) {
-      console.error('Failed to process images:', error);
-      toast.error('Failed to process images. Please try again.');
-      resetState();
-    }
-  };
-
-  const handleSave = async () => {
-    if (!chapterName.trim()) {
+  const handleApproveAndSave = async () => {
+    if (!state.chapterName.trim()) {
       toast.error('Please enter a chapter name');
       return;
     }
 
-    if (!extractedText.trim()) {
-      toast.error('No content to save');
+    const successfulPages = state.pages.filter((p) => p.extraction !== null);
+    if (successfulPages.length === 0) {
+      toast.error('No pages were successfully scanned');
       return;
     }
 
-    setSaving(true);
+    dispatch({ type: 'SET_SAVING', saving: true });
+
     try {
+      // Aggregate content from all pages
+      const stringify = (arr: unknown[]) => arr.map(toDisplayString).join('\n');
+
+      const aggregatedContent = successfulPages
+        .map((p) => {
+          const ext = p.extraction!;
+          let content = toDisplayString(ext.text_content);
+          if (ext.visual_elements?.length > 0) {
+            content += '\n\n[Visual Elements]\n' + stringify(ext.visual_elements);
+          }
+          if (ext.key_facts?.length > 0) {
+            content += '\n\n[Key Facts]\n' + stringify(ext.key_facts);
+          }
+          if (ext.activities?.length > 0) {
+            content += '\n\n[Activities]\n' + stringify(ext.activities);
+          }
+          if (ext.question_seeds?.length > 0) {
+            content += '\n\n[Question Seeds]\n' + stringify(ext.question_seeds);
+          }
+          return content;
+        })
+        .join('\n\n---\n\n');
+
+      // Use createChapter for now (createWithPages is available for future use)
       await createChapter({
         subjectId,
-        name: chapterName.trim(),
-        chapterNumber,
-        content: extractedText,
-        pageCount,
-        sourceType,
+        name: state.chapterName.trim(),
+        chapterNumber: state.chapterNumber,
+        content: aggregatedContent,
+        pageCount: successfulPages.length,
+        sourceType: 'pdf',
         difficulty: null,
       });
-      toast.success('Chapter saved successfully');
+
+      toast.success(
+        `Chapter saved with ${successfulPages.length} pages of content`
+      );
       handleOpenChange(false);
     } catch (error) {
       console.error('Failed to save chapter:', error);
       toast.error('Failed to save chapter');
     } finally {
-      setSaving(false);
+      dispatch({ type: 'SET_SAVING', saving: false });
     }
   };
 
+  const maxPages = pdfLoaded ? pageCount : 0;
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
+      <DialogContent
+        className={`flex flex-col overflow-hidden ${
+          state.step === 'reviewing' || state.step === 'scanning'
+            ? 'sm:max-w-[900px] h-[90vh]'
+            : 'sm:max-w-[500px] max-h-[90vh]'
+        }`}
+      >
         <DialogHeader>
-          <DialogTitle>Upload Content</DialogTitle>
+          <DialogTitle>
+            {state.step === 'select' && 'Upload Textbook'}
+            {state.step === 'range' && 'Select Pages'}
+            {state.step === 'scanning' && 'Scanning Pages'}
+            {state.step === 'reviewing' && 'Review Extracted Content'}
+          </DialogTitle>
         </DialogHeader>
 
-        {step === 'select' && (
-          <Tabs defaultValue="pdf" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="pdf">PDF</TabsTrigger>
-              <TabsTrigger value="image">Image/Camera</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="pdf" className="mt-4">
-              <div className="space-y-4">
-                <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
-                  <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="mt-2 text-sm text-gray-600">
-                    Upload a PDF scanned with Microsoft Lens or similar
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">Max file size: 50MB</p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    className="hidden"
-                    onChange={handlePdfSelect}
-                  />
-                  <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    Select PDF
-                  </Button>
-                </div>
+        {/* Step 1: Select PDF or use cached */}
+        {state.step === 'select' && (
+          <div className="space-y-4">
+            {pdfLoaded && fileName && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm font-medium text-blue-900">
+                  PDF already loaded: {fileName}
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  {pageCount} pages available
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-3"
+                  onClick={handleUseCachedPdf}
+                >
+                  Create another unit from this PDF
+                </Button>
               </div>
-            </TabsContent>
+            )}
 
-            <TabsContent value="image" className="mt-4">
-              <div className="space-y-4">
-                {selectedImages.length === 0 ? (
-                  <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
-                    <Camera className="mx-auto h-12 w-12 text-gray-400" />
-                    <p className="mt-2 text-sm text-gray-600">
-                      Take photos or upload images of textbook pages
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Supports JPG, PNG. Max total size: 50MB
-                    </p>
-                    <input
-                      ref={imageInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      capture="environment"
-                      className="hidden"
-                      onChange={handleImageSelect}
-                    />
-                    <div className="mt-4 flex gap-2 justify-center">
-                      <Button
-                        variant="outline"
-                        onClick={() => imageInputRef.current?.click()}
-                      >
-                        <ImageIcon className="mr-2 h-4 w-4" />
-                        Select Images
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="max-h-[300px] overflow-y-auto pr-1">
-                      <div className="grid grid-cols-3 gap-2">
-                        {imagePreviews.map((url, idx) => (
-                          <div key={idx} className="relative aspect-[3/4] rounded-lg overflow-hidden bg-gray-100">
-                            <img
-                              src={url}
-                              alt={`Page ${idx + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                            <button
-                              onClick={() => removeImage(idx)}
-                              className="absolute top-1 right-1 p-1 bg-black/50 rounded-full text-white hover:bg-black/70"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                            <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/50 rounded text-white text-xs">
-                              {idx + 1}
-                            </span>
-                          </div>
-                        ))}
-                        <button
-                          onClick={() => imageInputRef.current?.click()}
-                          className="aspect-[3/4] rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-gray-300 hover:text-gray-500"
-                        >
-                          <ImageIcon className="h-6 w-6" />
-                          <span className="text-xs mt-1">Add</span>
-                        </button>
-                      </div>
-                    </div>
-                    <input
-                      ref={imageInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      capture="environment"
-                      className="hidden"
-                      onChange={handleImageSelect}
-                    />
-                    <Button onClick={processImages} className="w-full">
-                      Process {selectedImages.length} {selectedImages.length === 1 ? 'Image' : 'Images'}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
-        )}
-
-        {step === 'processing' && (
-          <div className="py-8 space-y-4">
-            <div className="text-center">
-              {sourceType === 'pdf' ? (
-                <FileText className="mx-auto h-12 w-12 text-primary animate-pulse" />
-              ) : (
-                <Camera className="mx-auto h-12 w-12 text-primary animate-pulse" />
-              )}
-              <p className="mt-4 text-sm text-gray-600">{progressText}</p>
+            <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
+              <FileText className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-2 text-sm text-gray-600">
+                {pdfLoaded
+                  ? 'Or upload a different textbook PDF'
+                  : 'Upload a textbook PDF'}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">Max file size: 100MB</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handlePdfSelect}
+              />
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Select PDF
+              </Button>
             </div>
-            <Progress value={progress} className="w-full" />
           </div>
         )}
 
-        {step === 'preview' && (
-          <div className="flex-1 overflow-hidden flex flex-col space-y-4">
-            {noTextLayerWarning && pendingOcrFallback && (
-              <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">
-                <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                <div className="text-yellow-800 flex-1">
-                  <p className="font-medium">Image-based PDF detected</p>
-                  <p className="text-yellow-700 mb-2">
-                    This PDF does not have embedded text. Would you like to run OCR to extract text from the images?
-                  </p>
-                  <Button
-                    size="sm"
-                    onClick={runOcrFallback}
-                    className="bg-yellow-600 hover:bg-yellow-700"
-                  >
-                    Run OCR Extraction
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {noTextLayerWarning && !pendingOcrFallback && (
-              <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">
-                <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                <div className="text-yellow-800">
-                  <p className="font-medium">Low text content detected</p>
-                  <p className="text-yellow-700">
-                    This PDF may not have an embedded text layer. For better results, use
-                    Microsoft Lens or similar scanner app that creates searchable PDFs.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {lowConfidenceWarning && (
-              <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">
-                <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                <div className="text-yellow-800">
-                  <p className="font-medium">Low OCR confidence</p>
-                  <p className="text-yellow-700">
-                    The text recognition confidence is low. Review and edit the extracted
-                    text before saving.
-                  </p>
-                </div>
-              </div>
-            )}
+        {/* Step 2: Select page range and chapter info */}
+        {state.step === 'range' && (
+          <div className="space-y-4">
+            <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
+              <span className="font-medium">{fileName}</span> — {pageCount} pages
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="chapterName">Chapter Name</Label>
+                <Label htmlFor="chapterName">Unit/Chapter Name</Label>
                 <Input
                   id="chapterName"
-                  value={chapterName}
-                  onChange={(e) => setChapterName(e.target.value)}
-                  placeholder="Enter chapter name"
+                  value={state.chapterName}
+                  onChange={(e) =>
+                    dispatch({ type: 'SET_CHAPTER_NAME', name: e.target.value })
+                  }
+                  placeholder="e.g., Fractions"
                 />
               </div>
               <div className="space-y-2">
@@ -552,35 +452,120 @@ export function UploadDialog({ open, onOpenChange, subjectId }: UploadDialogProp
                   id="chapterNumber"
                   type="number"
                   min={1}
-                  value={chapterNumber}
-                  onChange={(e) => setChapterNumber(parseInt(e.target.value, 10) || 1)}
+                  value={state.chapterNumber}
+                  onChange={(e) =>
+                    dispatch({
+                      type: 'SET_CHAPTER_NUMBER',
+                      num: parseInt(e.target.value, 10) || 1,
+                    })
+                  }
                 />
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Extracted Text</Label>
-                <span className="text-xs text-gray-500">
-                  {pageCount} {pageCount === 1 ? 'page' : 'pages'} • {sourceType.toUpperCase()}
-                </span>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="startPage">Start Page</Label>
+                <Input
+                  id="startPage"
+                  type="number"
+                  min={1}
+                  max={maxPages}
+                  value={state.startPage}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10) || 1;
+                    dispatch({ type: 'SET_START_PAGE', page: Math.min(val, maxPages) });
+                  }}
+                />
               </div>
-              <Textarea
-                value={extractedText}
-                onChange={(e) => setExtractedText(e.target.value)}
-                className="h-48 resize-none font-mono text-sm"
-                placeholder="Extracted text will appear here..."
-              />
+              <div className="space-y-2">
+                <Label htmlFor="endPage">End Page</Label>
+                <Input
+                  id="endPage"
+                  type="number"
+                  min={state.startPage}
+                  max={maxPages}
+                  value={state.endPage}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10) || state.startPage;
+                    dispatch({
+                      type: 'SET_END_PAGE',
+                      page: Math.max(state.startPage, Math.min(val, maxPages)),
+                    });
+                  }}
+                />
+              </div>
             </div>
 
+            <p className="text-xs text-gray-500">
+              {state.endPage - state.startPage + 1} pages will be scanned with AI.
+              Each page takes ~3-5 seconds.
+            </p>
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => resetState()}>
-                Upload Different File
+              <Button
+                variant="outline"
+                onClick={() => dispatch({ type: 'SET_STEP', step: 'select' })}
+              >
+                Back
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving...' : 'Save Chapter'}
+              <Button
+                onClick={startScanning}
+                disabled={
+                  !state.chapterName.trim() ||
+                  state.startPage > state.endPage ||
+                  state.endPage > maxPages
+                }
+              >
+                Start Scanning ({state.endPage - state.startPage + 1} pages)
               </Button>
             </DialogFooter>
+          </div>
+        )}
+
+        {/* Step 3: Scanning progress (auto-transitions to reviewing) */}
+        {state.step === 'scanning' && (
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            {state.pages.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <Loader2 className="mx-auto h-12 w-12 text-primary animate-spin" />
+                  <p className="mt-4 text-sm text-gray-600">{state.progressText}</p>
+                  <Progress value={state.progress} className="w-64 mx-auto mt-4" />
+                </div>
+              </div>
+            ) : (
+              <PageReviewPanel
+                pages={state.pages}
+                currentPageIndex={state.currentPageIndex}
+                onPageChange={(idx) =>
+                  dispatch({ type: 'SET_CURRENT_PAGE', index: idx })
+                }
+                onExtractionEdit={(idx, ext) =>
+                  dispatch({ type: 'EDIT_EXTRACTION', index: idx, extraction: ext })
+                }
+                onApproveAll={handleApproveAndSave}
+                approving={state.saving}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Step 4: Review and approve */}
+        {state.step === 'reviewing' && (
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <PageReviewPanel
+              pages={state.pages}
+              currentPageIndex={state.currentPageIndex}
+              onPageChange={(idx) =>
+                dispatch({ type: 'SET_CURRENT_PAGE', index: idx })
+              }
+              onExtractionEdit={(idx, ext) =>
+                dispatch({ type: 'EDIT_EXTRACTION', index: idx, extraction: ext })
+              }
+              onApproveAll={handleApproveAndSave}
+              approving={state.saving}
+            />
           </div>
         )}
       </DialogContent>

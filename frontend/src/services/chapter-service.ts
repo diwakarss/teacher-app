@@ -1,9 +1,25 @@
 import { getDb, persistDb } from '@/lib/db/database';
-import type { Chapter, NewChapter } from '@/lib/db/schema';
+import type { Chapter, ChapterPage, NewChapter } from '@/lib/db/schema';
 import { v4 as uuid } from 'uuid';
 
 export type ChapterDifficulty = 'easy' | 'medium' | 'hard';
 export type ChapterSourceType = 'pdf' | 'image';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToChapter(row: any[]): Chapter {
+  return {
+    id: row[0] as string,
+    subjectId: row[1] as string,
+    name: row[2] as string,
+    chapterNumber: row[3] as number,
+    content: row[4] as string,
+    pageCount: row[5] as number | null,
+    sourceType: row[6] as string,
+    difficulty: row[7] as string | null,
+    createdAt: row[8] as string,
+    updatedAt: row[9] as string,
+  };
+}
 
 export const chapterService = {
   async getBySubjectId(subjectId: string): Promise<Chapter[]> {
@@ -16,19 +32,7 @@ export const chapterService = {
 
     const chapters: Chapter[] = [];
     while (stmt.step()) {
-      const row = stmt.get();
-      chapters.push({
-        id: row[0] as string,
-        subjectId: row[1] as string,
-        name: row[2] as string,
-        chapterNumber: row[3] as number,
-        content: row[4] as string,
-        pageCount: row[5] as number | null,
-        sourceType: row[6] as string,
-        difficulty: row[7] as string | null,
-        createdAt: row[8] as string,
-        updatedAt: row[9] as string,
-      });
+      chapters.push(rowToChapter(stmt.get()));
     }
     stmt.free();
 
@@ -48,21 +52,10 @@ export const chapterService = {
       return null;
     }
 
-    const row = stmt.get();
+    const chapter = rowToChapter(stmt.get());
     stmt.free();
 
-    return {
-      id: row[0] as string,
-      subjectId: row[1] as string,
-      name: row[2] as string,
-      chapterNumber: row[3] as number,
-      content: row[4] as string,
-      pageCount: row[5] as number | null,
-      sourceType: row[6] as string,
-      difficulty: row[7] as string | null,
-      createdAt: row[8] as string,
-      updatedAt: row[9] as string,
-    };
+    return chapter;
   },
 
   async create(
@@ -210,22 +203,84 @@ export const chapterService = {
 
     const chapters: Chapter[] = [];
     while (stmt.step()) {
-      const row = stmt.get();
-      chapters.push({
-        id: row[0] as string,
-        subjectId: row[1] as string,
-        name: row[2] as string,
-        chapterNumber: row[3] as number,
-        content: row[4] as string,
-        pageCount: row[5] as number | null,
-        sourceType: row[6] as string,
-        difficulty: row[7] as string | null,
-        createdAt: row[8] as string,
-        updatedAt: row[9] as string,
-      });
+      chapters.push(rowToChapter(stmt.get()));
     }
     stmt.free();
 
     return chapters;
+  },
+
+  async createWithPages(
+    chapterData: Omit<NewChapter, 'id' | 'createdAt' | 'updatedAt'>,
+    pages: { pageNumber: number; extraction: string }[]
+  ): Promise<{ chapter: Chapter; pages: ChapterPage[] }> {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    const chapterId = uuid();
+
+    const createdPages: ChapterPage[] = [];
+
+    try {
+      db.run('BEGIN TRANSACTION');
+
+      const chapterStmt = db.prepare(
+        `INSERT INTO chapters (id, subject_id, name, chapter_number, content, page_count, source_type, difficulty, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      chapterStmt.run([
+        chapterId,
+        chapterData.subjectId,
+        chapterData.name,
+        chapterData.chapterNumber,
+        chapterData.content,
+        chapterData.pageCount ?? 1,
+        chapterData.sourceType,
+        chapterData.difficulty ?? null,
+        now,
+        now,
+      ]);
+      chapterStmt.free();
+      const pageStmt = db.prepare(
+        `INSERT INTO chapter_pages (id, chapter_id, page_number, extraction, teacher_corrections, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      );
+
+      for (const page of pages) {
+        const pageId = uuid();
+        pageStmt.run([pageId, chapterId, page.pageNumber, page.extraction, null, now, now]);
+        createdPages.push({
+          id: pageId,
+          chapterId,
+          pageNumber: page.pageNumber,
+          extraction: page.extraction,
+          teacherCorrections: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      pageStmt.free();
+
+      db.run('COMMIT');
+    } catch (error) {
+      db.run('ROLLBACK');
+      throw error;
+    }
+
+    await persistDb();
+
+    const chapter: Chapter = {
+      id: chapterId,
+      subjectId: chapterData.subjectId,
+      name: chapterData.name,
+      chapterNumber: chapterData.chapterNumber,
+      content: chapterData.content,
+      pageCount: chapterData.pageCount ?? 1,
+      sourceType: chapterData.sourceType,
+      difficulty: chapterData.difficulty ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    return { chapter, pages: createdPages };
   },
 };

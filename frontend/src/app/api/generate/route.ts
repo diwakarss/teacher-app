@@ -1,78 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  BedrockRuntimeClient,
-  ConverseCommand,
-} from '@aws-sdk/client-bedrock-runtime';
+import { ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
+import { createBedrockClient, MODEL_ID } from '@/lib/bedrock-client';
 import { buildLessonPlanPrompt } from '@/lib/prompts/lesson-plan-prompt';
 import { buildQuestionPaperPrompt } from '@/lib/prompts/question-paper-prompt';
-
-// Support both API key (bearer token) and IAM credentials
-// API key: Set AWS_BEARER_TOKEN_BEDROCK env var
-// IAM: Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY env vars
-function createBedrockClient(): BedrockRuntimeClient {
-  const region = process.env.AWS_REGION || 'us-east-1';
-
-  // API key authentication (preferred, simpler)
-  if (process.env.AWS_BEARER_TOKEN_BEDROCK) {
-    return new BedrockRuntimeClient({
-      region,
-      token: { token: process.env.AWS_BEARER_TOKEN_BEDROCK },
-    });
-  }
-
-  // Fall back to IAM credentials (auto-resolved from env)
-  return new BedrockRuntimeClient({ region });
-}
-
-// Use inference profile ID (required for on-demand throughput)
-// Claude 3.5 Haiku is faster and more capable than Claude 3 Haiku
-const MODEL_ID = 'us.anthropic.claude-3-5-haiku-20241022-v1:0';
-
-function buildFeedbackPrompt(req: FeedbackRequest): string {
-  const toneInstructions = {
-    encouraging: 'Use a warm, supportive, and encouraging tone. Focus on positives and frame areas for improvement constructively.',
-    neutral: 'Use a balanced, factual tone. Present both achievements and areas for improvement objectively.',
-    serious: 'Use a direct, action-focused tone. Be clear about concerns and specific about what needs to be done.',
-  };
-
-  const trendDescription: Record<string, string> = {
-    improving: 'showing improvement',
-    stable: 'maintaining consistent performance',
-    declining: 'showing a decline in performance',
-    unknown: '',
-  };
-
-  return `Generate a brief parent feedback message (2-3 sentences) for a student.
-
-Student: ${req.studentName}
-Subject: ${req.subjectName}
-Assessment: ${req.assessmentName}
-Score: ${req.marksObtained}/${req.maxMarks} (${req.percentage.toFixed(0)}%)
-Grade: ${req.grade}
-Class Average: ${req.classAverage.toFixed(0)}%
-Performance: ${req.performanceLevel}${req.trend !== 'unknown' ? `, ${trendDescription[req.trend]}` : ''}
-
-${toneInstructions[req.tone]}
-
-Write the message as if addressing "Dear Parent" and sign off as "Class Teacher". Keep it concise and actionable. Do not use markdown formatting.`;
-}
+import { buildFeedbackPrompt, type FeedbackRequest } from '@/lib/prompts/feedback-prompt';
 
 export type GenerationType = 'lesson_plan' | 'question_paper' | 'feedback';
 
-export interface FeedbackRequest {
-  type: 'feedback';
-  studentName: string;
-  subjectName: string;
-  assessmentName: string;
-  marksObtained: number;
-  maxMarks: number;
-  percentage: number;
-  grade: string;
-  classAverage: number;
-  performanceLevel: string;
-  trend: string;
-  tone: 'encouraging' | 'neutral' | 'serious';
-}
+export type { FeedbackRequest };
 
 export interface LessonPlanRequest {
   type: 'lesson_plan';
