@@ -13,6 +13,7 @@ import { initializeDb } from '@/lib/db/database';
 import type { LessonPlan, QuestionPaper } from '@/lib/db/schema';
 import type { LessonPlanOutput } from '@/lib/prompts/lesson-plan-prompt';
 import type { QuestionPaperOutput } from '@/lib/prompts/question-paper-prompt';
+import { resolveAllImages } from '@/lib/image-resolver';
 
 interface GenerationState {
   // Lesson Plans
@@ -236,11 +237,28 @@ export const useGenerationStore = create<GenerationState>((set, get) => ({
     set({ generating: true, error: null, pendingQuestionPaper: null });
     try {
       const output = await questionPaperService.generate(params);
+
+      // Show paper immediately (images may still be loading)
       set({
         pendingQuestionPaper: output,
         pendingQuestionPaperParams: params,
         generating: false,
       });
+
+      // Resolve images in background (SVG instant, AI images 5-10s each)
+      const hasImages = output.sections.some((s) =>
+        s.questions.some((q) => q.image && !q.image.svgData && !q.image.base64Data),
+      );
+      if (hasImages) {
+        const resolvedSections = await resolveAllImages(output.sections);
+        // Update paper with resolved images (only if still the same paper)
+        const current = get().pendingQuestionPaper;
+        if (current && current.name === output.name) {
+          set({
+            pendingQuestionPaper: { ...current, sections: resolvedSections },
+          });
+        }
+      }
     } catch (error) {
       console.error('Failed to generate question paper:', error);
       set({ error: (error as Error).message, generating: false });

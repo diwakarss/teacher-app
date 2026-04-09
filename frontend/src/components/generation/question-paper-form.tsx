@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useReducer, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -13,19 +14,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, FileQuestion, Info, WifiOff } from 'lucide-react';
+import {
+  Loader2,
+  FileQuestion,
+  WifiOff,
+  Plus,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore } from '@/stores/app-store';
 import { useOnlineStatus } from '@/hooks/use-online-status';
 import { useClassStore } from '@/stores/class-store';
 import { useContentStore } from '@/stores/content-store';
 import { subjectService } from '@/services/subject-service';
+import type { GenerateQuestionPaperParams, QuestionPaperDifficulty } from '@/services/question-paper-service';
 import {
-  type GenerateQuestionPaperParams,
-  type QuestionPaperDifficulty,
-  type QuestionPaperTemplate,
-} from '@/services/question-paper-service';
-import { getDefaultDistribution } from '@/lib/prompts/question-paper-prompt';
+  type PaperFormat,
+  type SectionConfig,
+  type QuestionType,
+  PAPER_FORMAT_PRESETS,
+  QUESTION_TYPE_LABELS,
+  getDefaultSections,
+  calculateTotalMarks,
+} from '@/lib/prompts/question-paper-prompt';
 import type { Subject } from '@/lib/db/schema';
 
 interface QuestionPaperFormProps {
@@ -33,11 +46,59 @@ interface QuestionPaperFormProps {
   generating: boolean;
 }
 
-const TEMPLATES: { value: QuestionPaperTemplate; label: string; marks: number; duration: number }[] = [
-  { value: 'unit_test', label: 'Unit Test', marks: 40, duration: 45 },
-  { value: 'monthly_test', label: 'Monthly Test', marks: 50, duration: 60 },
-  { value: 'term_exam', label: 'Term Exam', marks: 100, duration: 180 },
-  { value: 'custom', label: 'Custom', marks: 50, duration: 60 },
+// ── Section reducer ─────────────────────────────────────────────────────────
+
+type SectionAction =
+  | { type: 'set'; sections: SectionConfig[] }
+  | { type: 'add'; questionType: QuestionType }
+  | { type: 'remove'; index: number }
+  | { type: 'update'; index: number; field: keyof SectionConfig; value: string | number }
+  | { type: 'move'; index: number; direction: 'up' | 'down' };
+
+function sectionReducer(state: SectionConfig[], action: SectionAction): SectionConfig[] {
+  switch (action.type) {
+    case 'set':
+      return action.sections;
+    case 'add':
+      return [...state, { questionType: action.questionType, count: 5, marksEach: 1 }];
+    case 'remove':
+      return state.filter((_, i) => i !== action.index);
+    case 'update': {
+      const next = [...state];
+      next[action.index] = { ...next[action.index], [action.field]: action.value };
+      return next;
+    }
+    case 'move': {
+      const next = [...state];
+      const target = action.direction === 'up' ? action.index - 1 : action.index + 1;
+      if (target < 0 || target >= next.length) return state;
+      [next[action.index], next[target]] = [next[target], next[action.index]];
+      return next;
+    }
+  }
+}
+
+// ── Available question types for the "add section" picker ───────────────────
+
+const QUESTION_TYPES: QuestionType[] = [
+  'define',
+  'fill_blank',
+  'fill_blank_word_bank',
+  'true_false',
+  'complete_paragraph',
+  'classify',
+  'comparison_table',
+  'match',
+  'short_answer',
+  'long_answer',
+  'advantages_disadvantages',
+  'mcq',
+  // Image-dependent types
+  'read_pictogram',
+  'read_chart',
+  'read_scratch',
+  'debug_scratch',
+  'grid_trace',
 ];
 
 const DIFFICULTIES: { value: QuestionPaperDifficulty; label: string }[] = [
@@ -46,6 +107,8 @@ const DIFFICULTIES: { value: QuestionPaperDifficulty; label: string }[] = [
   { value: 'hard', label: 'Hard' },
   { value: 'mixed', label: 'Mixed' },
 ];
+
+const SECTION_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 export function QuestionPaperForm({
   onGenerate,
@@ -59,14 +122,13 @@ export function QuestionPaperForm({
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [selectedChapterIds, setSelectedChapterIds] = useState<string[]>([]);
-  const [template, setTemplate] = useState<QuestionPaperTemplate>('unit_test');
+  const [paperFormat, setPaperFormat] = useState<PaperFormat>('ct');
   const [difficulty, setDifficulty] = useState<QuestionPaperDifficulty>('medium');
-  const [totalMarks, setTotalMarks] = useState<string>('40');
-  const [duration, setDuration] = useState<string>('45');
-  const [useCustomDistribution, setUseCustomDistribution] = useState(false);
-  const [sectionA, setSectionA] = useState({ count: 10, marksEach: 1 });
-  const [sectionB, setSectionB] = useState({ count: 5, marksEach: 2 });
-  const [sectionC, setSectionC] = useState({ count: 4, marksEach: 5 });
+  const [totalMarks, setTotalMarks] = useState<string>('15');
+  const [duration, setDuration] = useState<string>('30');
+  const [grade, setGrade] = useState<string>('');
+  const [sections, dispatch] = useReducer(sectionReducer, getDefaultSections('ct'));
+  const [addingType, setAddingType] = useState<QuestionType | ''>('');
 
   const activeClass = classes.find((c) => c.id === activeClassId);
   const selectedSubject = subjects.find((s) => s.id === selectedSubjectId);
@@ -74,6 +136,14 @@ export function QuestionPaperForm({
   useEffect(() => {
     loadClasses();
   }, [loadClasses]);
+
+  // Auto-set grade from class name if it contains a number
+  useEffect(() => {
+    if (activeClass && !grade) {
+      const match = activeClass.name.match(/\d+/);
+      if (match) setGrade(`Grade ${match[0]}`);
+    }
+  }, [activeClass, grade]);
 
   const loadSubjectsForClass = useCallback(async (classId: string | null) => {
     if (!classId) return;
@@ -93,20 +163,13 @@ export function QuestionPaperForm({
     }
   }, [selectedSubjectId, loadChapters]);
 
-  // Update marks/duration when template changes
+  // Update defaults when paper format changes
   useEffect(() => {
-    const templateInfo = TEMPLATES.find((t) => t.value === template);
-    if (templateInfo && template !== 'custom') {
-      setTotalMarks(templateInfo.marks.toString());
-      setDuration(templateInfo.duration.toString());
-
-      // Update section distribution based on template
-      const dist = getDefaultDistribution(templateInfo.marks, template);
-      setSectionA(dist.sectionA);
-      setSectionB(dist.sectionB);
-      setSectionC(dist.sectionC);
-    }
-  }, [template]);
+    const preset = PAPER_FORMAT_PRESETS[paperFormat];
+    setTotalMarks(preset.defaultMarks.toString());
+    setDuration(preset.defaultDuration.toString());
+    dispatch({ type: 'set', sections: getDefaultSections(paperFormat) });
+  }, [paperFormat]);
 
   const toggleChapter = (chapterId: string) => {
     setSelectedChapterIds((prev) =>
@@ -116,21 +179,17 @@ export function QuestionPaperForm({
     );
   };
 
-  const selectAllChapters = () => {
-    setSelectedChapterIds(chapters.map((c) => c.id));
-  };
+  const selectAllChapters = () => setSelectedChapterIds(chapters.map((c) => c.id));
+  const deselectAllChapters = () => setSelectedChapterIds([]);
 
-  const deselectAllChapters = () => {
-    setSelectedChapterIds([]);
-  };
+  const calculatedTotal = useMemo(() => calculateTotalMarks(sections), [sections]);
+  const marksMatch = calculatedTotal === parseInt(totalMarks);
 
-  const calculatedTotal = useMemo(() => {
-    return (
-      sectionA.count * sectionA.marksEach +
-      sectionB.count * sectionB.marksEach +
-      sectionC.count * sectionC.marksEach
-    );
-  }, [sectionA, sectionB, sectionC]);
+  const handleAddSection = () => {
+    if (!addingType) return;
+    dispatch({ type: 'add', questionType: addingType as QuestionType });
+    setAddingType('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,6 +200,13 @@ export function QuestionPaperForm({
     }
 
     if (!selectedSubject || selectedChapterIds.length === 0) return;
+    if (sections.length === 0) {
+      toast.error('Add at least one section');
+      return;
+    }
+
+    // Auto-adjust totalMarks to match sections if they differ
+    const marks = calculatedTotal;
 
     const selectedChapters = chapters.filter((c) =>
       selectedChapterIds.includes(c.id)
@@ -149,18 +215,17 @@ export function QuestionPaperForm({
     const params: GenerateQuestionPaperParams = {
       subjectId: selectedSubject.id,
       subjectName: selectedSubject.name,
+      grade: grade || 'Grade 3',
       chapterIds: selectedChapterIds,
       chaptersContent: selectedChapters.map((c) => ({
         name: c.name,
         content: c.content,
       })),
-      totalMarks: parseInt(totalMarks) || 50,
-      duration: parseInt(duration) || 60,
+      totalMarks: marks,
+      duration: parseInt(duration) || 30,
       difficulty,
-      template,
-      sectionDistribution: useCustomDistribution
-        ? { sectionA, sectionB, sectionC }
-        : undefined,
+      paperFormat,
+      sections,
     };
 
     await onGenerate(params);
@@ -169,8 +234,8 @@ export function QuestionPaperForm({
   const isValid =
     selectedSubjectId &&
     selectedChapterIds.length > 0 &&
-    totalMarks &&
-    parseInt(totalMarks) > 0 &&
+    sections.length > 0 &&
+    calculatedTotal > 0 &&
     duration &&
     parseInt(duration) > 0;
 
@@ -190,13 +255,12 @@ export function QuestionPaperForm({
             </div>
           )}
 
+          {/* Subject selector */}
           <div className="space-y-2">
             <Label htmlFor="subject">Subject</Label>
             <Select
               value={selectedSubjectId}
-              onValueChange={(value) => {
-                setSelectedSubjectId(value);
-              }}
+              onValueChange={setSelectedSubjectId}
             >
               <SelectTrigger id="subject">
                 <SelectValue placeholder="Select subject" />
@@ -211,6 +275,7 @@ export function QuestionPaperForm({
             </Select>
           </div>
 
+          {/* Chapter selector */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>
@@ -221,22 +286,10 @@ export function QuestionPaperForm({
               </Label>
               {chapters.length > 0 && (
                 <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={selectAllChapters}
-                    className="h-7 text-xs"
-                  >
+                  <Button type="button" variant="ghost" size="sm" onClick={selectAllChapters} className="h-7 text-xs">
                     Select All
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={deselectAllChapters}
-                    className="h-7 text-xs"
-                  >
+                  <Button type="button" variant="ghost" size="sm" onClick={deselectAllChapters} className="h-7 text-xs">
                     Clear
                   </Button>
                 </div>
@@ -255,10 +308,7 @@ export function QuestionPaperForm({
                       checked={selectedChapterIds.includes(chapter.id)}
                       onCheckedChange={() => toggleChapter(chapter.id)}
                     />
-                    <label
-                      htmlFor={chapter.id}
-                      className="flex-1 cursor-pointer text-sm"
-                    >
+                    <label htmlFor={chapter.id} className="flex-1 cursor-pointer text-sm">
                       Ch. {chapter.chapterNumber}: {chapter.name}
                     </label>
                   </div>
@@ -267,37 +317,32 @@ export function QuestionPaperForm({
             </div>
           </div>
 
+          {/* Paper format + difficulty */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="template">Template</Label>
-              <Select
-                value={template}
-                onValueChange={(v) => setTemplate(v as QuestionPaperTemplate)}
-              >
-                <SelectTrigger id="template">
+              <Label htmlFor="paperFormat">Paper Format</Label>
+              <Select value={paperFormat} onValueChange={(v) => setPaperFormat(v as PaperFormat)}>
+                <SelectTrigger id="paperFormat">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {TEMPLATES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}{' '}
-                      {t.value !== 'custom' && (
-                        <span className="text-muted-foreground">
-                          ({t.marks} marks)
-                        </span>
-                      )}
-                    </SelectItem>
-                  ))}
+                  {(Object.entries(PAPER_FORMAT_PRESETS) as [PaperFormat, typeof PAPER_FORMAT_PRESETS.ct][]).map(
+                    ([key, preset]) => (
+                      <SelectItem key={key} value={key}>
+                        {preset.label}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                {PAPER_FORMAT_PRESETS[paperFormat].description}
+              </p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="difficulty">Difficulty</Label>
-              <Select
-                value={difficulty}
-                onValueChange={(v) => setDifficulty(v as QuestionPaperDifficulty)}
-              >
+              <Select value={difficulty} onValueChange={(v) => setDifficulty(v as QuestionPaperDifficulty)}>
                 <SelectTrigger id="difficulty">
                   <SelectValue />
                 </SelectTrigger>
@@ -312,178 +357,187 @@ export function QuestionPaperForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* Grade + Duration */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="grade">Grade</Label>
+              <Input
+                id="grade"
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+                placeholder="Grade 3"
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="totalMarks">Total Marks</Label>
               <Input
                 id="totalMarks"
                 type="number"
-                min="20"
+                min="5"
                 max="200"
                 value={totalMarks}
                 onChange={(e) => setTotalMarks(e.target.value)}
-                disabled={template !== 'custom'}
               />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="duration">Duration (minutes)</Label>
+              <Label htmlFor="duration">Duration (min)</Label>
               <Input
                 id="duration"
                 type="number"
-                min="15"
-                max="240"
+                min="10"
+                max="180"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
-                disabled={template !== 'custom'}
               />
             </div>
           </div>
 
+          {/* Section Builder */}
           <div className="space-y-3 rounded-md border p-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="customDist"
-                  checked={useCustomDistribution}
-                  onCheckedChange={(checked: boolean | 'indeterminate') =>
-                    setUseCustomDistribution(checked === true)
-                  }
-                />
-                <label htmlFor="customDist" className="text-sm font-medium">
-                  Customize Section Distribution
-                </label>
-              </div>
-              {useCustomDistribution && (
-                <span
-                  className={`text-sm ${
-                    calculatedTotal === parseInt(totalMarks)
-                      ? 'text-green-600'
-                      : 'text-destructive'
-                  }`}
-                >
-                  Total: {calculatedTotal}/{totalMarks}
-                </span>
-              )}
+              <Label className="text-sm font-semibold">Sections</Label>
+              <Badge variant={marksMatch ? 'default' : 'destructive'} className="text-xs">
+                {calculatedTotal} / {totalMarks} marks
+              </Badge>
             </div>
 
-            {useCustomDistribution && (
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Info className="h-3 w-3" />
-                  Section A: MCQ/Fill blanks | Section B: Short answer | Section
-                  C: Long answer
+            {/* Existing sections */}
+            <div className="space-y-2">
+              {sections.map((section, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 rounded-md border bg-gray-50 p-2"
+                >
+                  <span className="text-xs font-semibold text-gray-500 w-6">
+                    {SECTION_LETTERS[idx]}
+                  </span>
+
+                  <Select
+                    value={section.questionType}
+                    onValueChange={(v) =>
+                      dispatch({ type: 'update', index: idx, field: 'questionType', value: v })
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-xs flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {QUESTION_TYPES.map((qt) => (
+                        <SelectItem key={qt} value={qt}>
+                          {QUESTION_TYPE_LABELS[qt]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={section.count}
+                    onChange={(e) =>
+                      dispatch({
+                        type: 'update',
+                        index: idx,
+                        field: 'count',
+                        value: parseInt(e.target.value) || 1,
+                      })
+                    }
+                    className="h-8 w-16 text-xs text-center"
+                    title="Number of questions"
+                  />
+
+                  <span className="text-xs text-gray-400">&times;</span>
+
+                  <Input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={section.marksEach}
+                    onChange={(e) =>
+                      dispatch({
+                        type: 'update',
+                        index: idx,
+                        field: 'marksEach',
+                        value: parseInt(e.target.value) || 1,
+                      })
+                    }
+                    className="h-8 w-14 text-xs text-center"
+                    title="Marks per question"
+                  />
+
+                  <span className="text-xs text-gray-500 w-8 text-right">
+                    = {section.count * section.marksEach}
+                  </span>
+
+                  <div className="flex flex-col">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4"
+                      disabled={idx === 0}
+                      onClick={() => dispatch({ type: 'move', index: idx, direction: 'up' })}
+                    >
+                      <ChevronUp className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4"
+                      disabled={idx === sections.length - 1}
+                      onClick={() => dispatch({ type: 'move', index: idx, direction: 'down' })}
+                    >
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-destructive hover:text-destructive"
+                    onClick={() => dispatch({ type: 'remove', index: idx })}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
                 </div>
+              ))}
+            </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Section A</Label>
-                    <div className="flex gap-1">
-                      <Input
-                        type="number"
-                        min="0"
-                        value={sectionA.count}
-                        onChange={(e) =>
-                          setSectionA({
-                            ...sectionA,
-                            count: parseInt(e.target.value) || 0,
-                          })
-                        }
-                        className="h-8 text-xs"
-                        placeholder="Count"
-                      />
-                      <span className="flex items-center text-xs">×</span>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={sectionA.marksEach}
-                        onChange={(e) =>
-                          setSectionA({
-                            ...sectionA,
-                            marksEach: parseInt(e.target.value) || 1,
-                          })
-                        }
-                        className="h-8 w-14 text-xs"
-                        placeholder="Marks"
-                      />
-                    </div>
-                  </div>
+            {/* Add section */}
+            <div className="flex items-center gap-2">
+              <Select value={addingType} onValueChange={(v) => setAddingType(v as QuestionType)}>
+                <SelectTrigger className="h-8 text-xs flex-1">
+                  <SelectValue placeholder="Add a section..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUESTION_TYPES.map((qt) => (
+                    <SelectItem key={qt} value={qt}>
+                      {QUESTION_TYPE_LABELS[qt]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8"
+                disabled={!addingType}
+                onClick={handleAddSection}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add
+              </Button>
+            </div>
 
-                  <div className="space-y-1">
-                    <Label className="text-xs">Section B</Label>
-                    <div className="flex gap-1">
-                      <Input
-                        type="number"
-                        min="0"
-                        value={sectionB.count}
-                        onChange={(e) =>
-                          setSectionB({
-                            ...sectionB,
-                            count: parseInt(e.target.value) || 0,
-                          })
-                        }
-                        className="h-8 text-xs"
-                        placeholder="Count"
-                      />
-                      <span className="flex items-center text-xs">×</span>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={sectionB.marksEach}
-                        onChange={(e) =>
-                          setSectionB({
-                            ...sectionB,
-                            marksEach: parseInt(e.target.value) || 1,
-                          })
-                        }
-                        className="h-8 w-14 text-xs"
-                        placeholder="Marks"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">Section C</Label>
-                    <div className="flex gap-1">
-                      <Input
-                        type="number"
-                        min="0"
-                        value={sectionC.count}
-                        onChange={(e) =>
-                          setSectionC({
-                            ...sectionC,
-                            count: parseInt(e.target.value) || 0,
-                          })
-                        }
-                        className="h-8 text-xs"
-                        placeholder="Count"
-                      />
-                      <span className="flex items-center text-xs">×</span>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={sectionC.marksEach}
-                        onChange={(e) =>
-                          setSectionC({
-                            ...sectionC,
-                            marksEach: parseInt(e.target.value) || 1,
-                          })
-                        }
-                        className="h-8 w-14 text-xs"
-                        placeholder="Marks"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!useCustomDistribution && (
-              <div className="text-xs text-muted-foreground">
-                Section A: {sectionA.count}×{sectionA.marksEach} = {sectionA.count * sectionA.marksEach} marks |
-                Section B: {sectionB.count}×{sectionB.marksEach} = {sectionB.count * sectionB.marksEach} marks |
-                Section C: {sectionC.count}×{sectionC.marksEach} = {sectionC.count * sectionC.marksEach} marks
-              </div>
+            {!marksMatch && (
+              <p className="text-xs text-destructive">
+                Section total ({calculatedTotal}) does not match total marks ({totalMarks}).
+                The paper will be generated with {calculatedTotal} marks.
+              </p>
             )}
           </div>
 

@@ -2,80 +2,82 @@ import { getDb, persistDb } from '@/lib/db/database';
 import type { QuestionPaper, NewQuestionPaper } from '@/lib/db/schema';
 import type {
   QuestionPaperOutput,
-  Section,
+  PaperSection,
+  PaperFormat,
+  SectionConfig,
 } from '@/lib/prompts/question-paper-prompt';
 import {
   parseQuestionPaperResponse,
-  getDefaultDistribution,
+  getDefaultSections,
+  PAPER_FORMAT_PRESETS,
 } from '@/lib/prompts/question-paper-prompt';
 import { v4 as uuid } from 'uuid';
 
 export type QuestionPaperDifficulty = 'easy' | 'medium' | 'hard' | 'mixed';
-export type QuestionPaperTemplate =
-  | 'unit_test'
-  | 'monthly_test'
-  | 'term_exam'
-  | 'custom';
+export type { PaperFormat, SectionConfig };
 
 export interface GenerateQuestionPaperParams {
   subjectId: string;
   subjectName: string;
+  grade: string;
   chapterIds: string[];
   chaptersContent: { name: string; content: string }[];
   totalMarks: number;
   duration: number;
   difficulty: QuestionPaperDifficulty;
-  template: QuestionPaperTemplate;
-  sectionDistribution?: {
-    sectionA: { count: number; marksEach: number };
-    sectionB: { count: number; marksEach: number };
-    sectionC: { count: number; marksEach: number };
-  };
+  paperFormat: PaperFormat;
+  sections: SectionConfig[];
+  schoolName?: string;
 }
 
 export interface QuestionPaperWithParsed extends QuestionPaper {
   parsedChapterIds: string[];
-  parsedSections: Section[];
+  parsedSections: PaperSection[];
   parsedAnswerKey: Array<{ questionNumber: string; answer: string }>;
 }
+
+// ── Row mapper ──────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToQuestionPaper(row: any[]): QuestionPaper {
+  return {
+    id: row[0] as string,
+    subjectId: row[1] as string,
+    chapterIds: row[2] as string,
+    name: row[3] as string,
+    totalMarks: row[4] as number,
+    duration: row[5] as number,
+    difficulty: row[6] as string,
+    template: row[7] as string,
+    sections: row[8] as string,
+    answerKey: row[9] as string,
+    createdAt: row[10] as string,
+    updatedAt: row[11] as string,
+  };
+}
+
+const SELECT_COLS = `id, subject_id, chapter_ids, name, total_marks, duration, difficulty, template, sections, answer_key, created_at, updated_at`;
 
 export const questionPaperService = {
   async getBySubjectId(subjectId: string): Promise<QuestionPaper[]> {
     const db = await getDb();
     const stmt = db.prepare(
-      `SELECT id, subject_id, chapter_ids, name, total_marks, duration, difficulty, template, sections, answer_key, created_at, updated_at
-       FROM question_papers WHERE subject_id = ? ORDER BY created_at DESC`
+      `SELECT ${SELECT_COLS} FROM question_papers WHERE subject_id = ? ORDER BY created_at DESC`
     );
     stmt.bind([subjectId]);
 
     const papers: QuestionPaper[] = [];
     while (stmt.step()) {
-      const row = stmt.get();
-      papers.push({
-        id: row[0] as string,
-        subjectId: row[1] as string,
-        chapterIds: row[2] as string,
-        name: row[3] as string,
-        totalMarks: row[4] as number,
-        duration: row[5] as number,
-        difficulty: row[6] as string,
-        template: row[7] as string,
-        sections: row[8] as string,
-        answerKey: row[9] as string,
-        createdAt: row[10] as string,
-        updatedAt: row[11] as string,
-      });
+      papers.push(rowToQuestionPaper(stmt.get()));
     }
     stmt.free();
-
     return papers;
   },
 
   async getById(id: string): Promise<QuestionPaper | null> {
     const db = await getDb();
     const stmt = db.prepare(
-      `SELECT id, subject_id, chapter_ids, name, total_marks, duration, difficulty, template, sections, answer_key, created_at, updated_at
-       FROM question_papers WHERE id = ?`
+      `SELECT ${SELECT_COLS} FROM question_papers WHERE id = ?`
     );
     stmt.bind([id]);
 
@@ -84,52 +86,22 @@ export const questionPaperService = {
       return null;
     }
 
-    const row = stmt.get();
+    const paper = rowToQuestionPaper(stmt.get());
     stmt.free();
-
-    return {
-      id: row[0] as string,
-      subjectId: row[1] as string,
-      chapterIds: row[2] as string,
-      name: row[3] as string,
-      totalMarks: row[4] as number,
-      duration: row[5] as number,
-      difficulty: row[6] as string,
-      template: row[7] as string,
-      sections: row[8] as string,
-      answerKey: row[9] as string,
-      createdAt: row[10] as string,
-      updatedAt: row[11] as string,
-    };
+    return paper;
   },
 
   async getAll(): Promise<QuestionPaper[]> {
     const db = await getDb();
     const stmt = db.prepare(
-      `SELECT id, subject_id, chapter_ids, name, total_marks, duration, difficulty, template, sections, answer_key, created_at, updated_at
-       FROM question_papers ORDER BY created_at DESC`
+      `SELECT ${SELECT_COLS} FROM question_papers ORDER BY created_at DESC`
     );
 
     const papers: QuestionPaper[] = [];
     while (stmt.step()) {
-      const row = stmt.get();
-      papers.push({
-        id: row[0] as string,
-        subjectId: row[1] as string,
-        chapterIds: row[2] as string,
-        name: row[3] as string,
-        totalMarks: row[4] as number,
-        duration: row[5] as number,
-        difficulty: row[6] as string,
-        template: row[7] as string,
-        sections: row[8] as string,
-        answerKey: row[9] as string,
-        createdAt: row[10] as string,
-        updatedAt: row[11] as string,
-      });
+      papers.push(rowToQuestionPaper(stmt.get()));
     }
     stmt.free();
-
     return papers;
   },
 
@@ -190,11 +162,7 @@ export const questionPaperService = {
       throw new Error(`Question paper with id ${id} not found`);
     }
 
-    const updated = {
-      ...existing,
-      ...data,
-      updatedAt: now,
-    };
+    const updated = { ...existing, ...data, updatedAt: now };
 
     const stmt = db.prepare(
       `UPDATE question_papers SET chapter_ids = ?, name = ?, total_marks = ?, duration = ?, difficulty = ?, template = ?, sections = ?, answer_key = ?, updated_at = ? WHERE id = ?`
@@ -214,7 +182,6 @@ export const questionPaperService = {
     stmt.free();
 
     await persistDb();
-
     return updated;
   },
 
@@ -236,11 +203,13 @@ export const questionPaperService = {
         type: 'question_paper',
         chaptersContent: params.chaptersContent,
         subjectName: params.subjectName,
+        grade: params.grade,
         totalMarks: params.totalMarks,
         duration: params.duration,
         difficulty: params.difficulty,
-        template: params.template,
-        sectionDistribution: params.sectionDistribution,
+        paperFormat: params.paperFormat,
+        sections: params.sections,
+        schoolName: params.schoolName,
       }),
     });
 
@@ -273,7 +242,7 @@ export const questionPaperService = {
       totalMarks: params.totalMarks,
       duration: params.duration,
       difficulty: params.difficulty,
-      template: params.template,
+      template: params.paperFormat,
       sections: JSON.stringify(output.sections),
       answerKey: JSON.stringify(output.answerKey),
     });
@@ -283,7 +252,7 @@ export const questionPaperService = {
     return {
       ...paper,
       parsedChapterIds: JSON.parse(paper.chapterIds) as string[],
-      parsedSections: JSON.parse(paper.sections) as Section[],
+      parsedSections: JSON.parse(paper.sections) as PaperSection[],
       parsedAnswerKey: JSON.parse(paper.answerKey) as Array<{
         questionNumber: string;
         answer: string;
@@ -291,21 +260,13 @@ export const questionPaperService = {
     };
   },
 
-  getDefaultDistribution,
+  getDefaultSections,
 
-  getTemplateInfo(
-    template: QuestionPaperTemplate
+  getFormatInfo(
+    format: PaperFormat
   ): { totalMarks: number; duration: number } {
-    switch (template) {
-      case 'unit_test':
-        return { totalMarks: 40, duration: 45 };
-      case 'monthly_test':
-        return { totalMarks: 50, duration: 60 };
-      case 'term_exam':
-        return { totalMarks: 100, duration: 180 };
-      default:
-        return { totalMarks: 50, duration: 60 };
-    }
+    const preset = PAPER_FORMAT_PRESETS[format];
+    return { totalMarks: preset.defaultMarks, duration: preset.defaultDuration };
   },
 
   async getCount(): Promise<number> {
@@ -320,31 +281,15 @@ export const questionPaperService = {
   async getRecent(limit: number = 5): Promise<QuestionPaper[]> {
     const db = await getDb();
     const stmt = db.prepare(
-      `SELECT id, subject_id, chapter_ids, name, total_marks, duration, difficulty, template, sections, answer_key, created_at, updated_at
-       FROM question_papers ORDER BY created_at DESC LIMIT ?`
+      `SELECT ${SELECT_COLS} FROM question_papers ORDER BY created_at DESC LIMIT ?`
     );
     stmt.bind([limit]);
 
     const papers: QuestionPaper[] = [];
     while (stmt.step()) {
-      const row = stmt.get();
-      papers.push({
-        id: row[0] as string,
-        subjectId: row[1] as string,
-        chapterIds: row[2] as string,
-        name: row[3] as string,
-        totalMarks: row[4] as number,
-        duration: row[5] as number,
-        difficulty: row[6] as string,
-        template: row[7] as string,
-        sections: row[8] as string,
-        answerKey: row[9] as string,
-        createdAt: row[10] as string,
-        updatedAt: row[11] as string,
-      });
+      papers.push(rowToQuestionPaper(stmt.get()));
     }
     stmt.free();
-
     return papers;
   },
 };
