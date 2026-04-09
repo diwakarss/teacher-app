@@ -200,6 +200,21 @@ export function printContent(html: string, options: PrintOptions): void {
           border-left: 3px solid #999;
         }
 
+        .question-image {
+          margin: 8pt 0;
+          text-align: center;
+        }
+
+        .question-image svg {
+          max-width: 100%;
+          height: auto;
+        }
+
+        .question-image img {
+          max-width: 400px;
+          max-height: 300px;
+        }
+
         @media print {
           body {
             padding: 0;
@@ -363,13 +378,30 @@ export function formatQuestionPaperForPrint(
         marks: number;
         type: string;
         options?: string[];
+        image?: {
+          kind: string;
+          svgData?: string;
+          base64Data?: string;
+          alt: string;
+        };
       }>;
     }>;
   },
   includeAnswers: boolean = false,
   answerKey?: Array<{ questionNumber: string; answer: string }>
 ): string {
-  const sectionPrefixes = ['A', 'B', 'C', 'D', 'E'];
+  const sectionPrefixes = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
+  function renderQuestionImage(q: { image?: { kind: string; svgData?: string; base64Data?: string; alt: string } }): string {
+    if (!q.image) return '';
+    if (q.image.svgData) {
+      return `<div class="question-image">${q.image.svgData}</div>`;
+    }
+    if (q.image.base64Data) {
+      return `<div class="question-image"><img src="data:image/png;base64,${q.image.base64Data}" alt="${q.image.alt}" style="max-width: 400px; max-height: 300px;" /></div>`;
+    }
+    return `<div class="question-image" style="border: 1px dashed #ccc; padding: 20px; text-align: center; color: #999;">[Image: ${q.image.alt}]</div>`;
+  }
 
   return `
     <div class="header">
@@ -405,6 +437,7 @@ export function formatQuestionPaperForPrint(
             <span class="question-marks">[${q.marks} ${q.marks === 1 ? 'mark' : 'marks'}]</span>
             <span class="question-number">${sectionPrefixes[sIdx] || 'Q'}${q.number}.</span>
             ${q.text}
+            ${renderQuestionImage(q)}
             ${
               q.options?.length
                 ? `

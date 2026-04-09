@@ -23,8 +23,10 @@ import type {
   QuestionPaperOutput,
   PaperSection,
   FlexibleQuestion,
+  QuestionImage,
 } from '@/lib/prompts/question-paper-prompt';
 import { QUESTION_TYPE_LABELS } from '@/lib/prompts/question-paper-prompt';
+import { isImageResolved, getImageDataUrl } from '@/lib/image-resolver';
 import type { QuestionPaperWithParsed } from '@/services/question-paper-service';
 
 interface QuestionPaperPreviewProps {
@@ -60,6 +62,11 @@ function QuestionDisplay({
           </div>
 
           <p className="mt-1 whitespace-pre-wrap">{question.text}</p>
+
+          {/* Question image */}
+          {question.image && (
+            <QuestionImageDisplay image={question.image} />
+          )}
 
           {/* Word bank / options */}
           {question.options && question.options.length > 0 && (
@@ -125,6 +132,45 @@ function QuestionDisplay({
       </div>
     </div>
   );
+}
+
+function QuestionImageDisplay({ image }: { image: QuestionImage }) {
+  if (!isImageResolved(image)) {
+    // Shimmer placeholder while image is loading
+    return (
+      <div className="mt-2 flex items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50 h-48">
+        <div className="text-center text-sm text-muted-foreground">
+          <div className="animate-pulse mb-1">Generating image...</div>
+          <div className="text-xs">{image.alt}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (image.svgData) {
+    return (
+      <div
+        className="mt-2 flex justify-center rounded-md border bg-white p-2"
+        dangerouslySetInnerHTML={{ __html: image.svgData }}
+      />
+    );
+  }
+
+  const dataUrl = getImageDataUrl(image);
+  if (dataUrl) {
+    return (
+      <div className="mt-2 flex justify-center rounded-md border bg-white p-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={dataUrl}
+          alt={image.alt}
+          className="max-h-64 object-contain"
+        />
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function WordBankOrOptions({ question }: { question: FlexibleQuestion }) {

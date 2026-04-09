@@ -93,6 +93,12 @@ const QUESTION_TYPES: QuestionType[] = [
   'long_answer',
   'advantages_disadvantages',
   'mcq',
+  // Image-dependent types
+  'read_pictogram',
+  'read_chart',
+  'read_scratch',
+  'debug_scratch',
+  'grid_trace',
 ];
 
 const DIFFICULTIES: { value: QuestionPaperDifficulty; label: string }[] = [

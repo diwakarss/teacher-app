@@ -7,6 +7,7 @@ import {
   validateSections,
   PAPER_FORMAT_PRESETS,
   QUESTION_TYPE_LABELS,
+  IMAGE_QUESTION_TYPES,
   type QuestionPaperOutput,
   type SectionConfig,
   type PaperFormat,
@@ -302,14 +303,133 @@ describe('PAPER_FORMAT_PRESETS', () => {
 });
 
 describe('QUESTION_TYPE_LABELS', () => {
-  it('has a label for every question type', () => {
+  it('has a label for every question type including image types', () => {
     const types: QuestionType[] = [
       'define', 'fill_blank', 'fill_blank_word_bank', 'true_false',
       'complete_paragraph', 'classify', 'comparison_table', 'match',
       'short_answer', 'long_answer', 'advantages_disadvantages', 'mcq',
+      'read_pictogram', 'read_chart', 'read_scratch', 'debug_scratch', 'grid_trace',
     ];
     for (const t of types) {
       expect(QUESTION_TYPE_LABELS[t]).toBeTruthy();
     }
+  });
+});
+
+describe('IMAGE_QUESTION_TYPES', () => {
+  it('contains all image-dependent types', () => {
+    expect(IMAGE_QUESTION_TYPES).toContain('read_pictogram');
+    expect(IMAGE_QUESTION_TYPES).toContain('read_chart');
+    expect(IMAGE_QUESTION_TYPES).toContain('read_scratch');
+    expect(IMAGE_QUESTION_TYPES).toContain('debug_scratch');
+    expect(IMAGE_QUESTION_TYPES).toContain('grid_trace');
+  });
+
+  it('does not contain text-only types', () => {
+    expect(IMAGE_QUESTION_TYPES).not.toContain('fill_blank');
+    expect(IMAGE_QUESTION_TYPES).not.toContain('short_answer');
+    expect(IMAGE_QUESTION_TYPES).not.toContain('mcq');
+  });
+});
+
+describe('image question type prompts', () => {
+  it('includes image instructions for read_pictogram sections', () => {
+    const prompt = buildQuestionPaperPrompt({
+      chaptersContent: [{ name: 'Data Handling', content: 'Students collected data about fruits' }],
+      subjectName: 'Math',
+      grade: 'Grade 3',
+      totalMarks: 5,
+      duration: 15,
+      difficulty: 'easy',
+      paperFormat: 'custom',
+      sections: [{ questionType: 'read_pictogram', count: 1, marksEach: 5 }],
+    });
+    expect(prompt).toContain('pictogram');
+    expect(prompt).toContain('"image"');
+    expect(prompt).toContain('"kind"');
+  });
+
+  it('includes image instructions for read_chart sections', () => {
+    const prompt = buildQuestionPaperPrompt({
+      chaptersContent: [{ name: 'Graphs', content: 'Monthly rainfall data' }],
+      subjectName: 'Math',
+      grade: 'Grade 3',
+      totalMarks: 5,
+      duration: 15,
+      difficulty: 'easy',
+      paperFormat: 'custom',
+      sections: [{ questionType: 'read_chart', count: 1, marksEach: 5 }],
+    });
+    expect(prompt).toContain('bar_chart');
+    expect(prompt).toContain('"image"');
+  });
+
+  it('includes image instructions for read_scratch sections', () => {
+    const prompt = buildQuestionPaperPrompt({
+      chaptersContent: [{ name: 'Algorithms', content: 'Scratch programming basics' }],
+      subjectName: 'Computing',
+      grade: 'Grade 3',
+      totalMarks: 3,
+      duration: 10,
+      difficulty: 'easy',
+      paperFormat: 'custom',
+      sections: [{ questionType: 'read_scratch', count: 1, marksEach: 3 }],
+    });
+    expect(prompt).toContain('scratch_blocks');
+    expect(prompt).toContain('"image"');
+  });
+});
+
+describe('parseQuestionPaperResponse with images', () => {
+  const paperWithImage: QuestionPaperOutput = {
+    name: 'Math CT',
+    header: {
+      schoolName: 'DPS', examType: 'CT', grade: 'Grade 3',
+      subject: 'Math', duration: '30 min', maxMarks: 5,
+      instructions: [],
+    },
+    sections: [{
+      name: 'Section A',
+      instructions: 'Read the pictogram and answer',
+      questionType: 'read_pictogram',
+      count: 1,
+      marksEach: 5,
+      totalMarks: 5,
+      questions: [{
+        number: 1,
+        type: 'read_pictogram',
+        text: 'Look at the pictogram and answer:',
+        marks: 5,
+        image: {
+          kind: 'pictogram',
+          prompt: 'title: Fruits; key: 1 icon = 2; data: Apple=6, Banana=4',
+          alt: 'Pictogram of fruits',
+        },
+        answerLines: 4,
+        answer: ['6', '4', '10'],
+      }],
+    }],
+    answerKey: [{ questionNumber: 'A1', answer: '6, 4, 10' }],
+  };
+
+  it('preserves valid image fields', () => {
+    const result = parseQuestionPaperResponse(JSON.stringify(paperWithImage));
+    expect(result?.sections[0].questions[0].image).toBeDefined();
+    expect(result?.sections[0].questions[0].image?.kind).toBe('pictogram');
+    expect(result?.sections[0].questions[0].image?.prompt).toContain('Fruits');
+  });
+
+  it('drops image fields missing kind or prompt', () => {
+    const bad = JSON.parse(JSON.stringify(paperWithImage));
+    bad.sections[0].questions[0].image = { kind: '', prompt: '', alt: 'test' };
+    const result = parseQuestionPaperResponse(JSON.stringify(bad));
+    expect(result?.sections[0].questions[0].image).toBeUndefined();
+  });
+
+  it('fills in missing alt from prompt', () => {
+    const noAlt = JSON.parse(JSON.stringify(paperWithImage));
+    delete noAlt.sections[0].questions[0].image.alt;
+    const result = parseQuestionPaperResponse(JSON.stringify(noAlt));
+    expect(result?.sections[0].questions[0].image?.alt).toContain('Fruits');
   });
 });

@@ -20,7 +20,13 @@ export type QuestionType =
   | 'short_answer'             // 2-3 sentence answers
   | 'long_answer'              // Paragraph / multi-part answers
   | 'advantages_disadvantages' // "Write advantages and disadvantages"
-  | 'mcq';                     // Multiple choice (kept for backward compat)
+  | 'mcq'                      // Multiple choice (kept for backward compat)
+  // Image-dependent question types (Phase 2)
+  | 'read_pictogram'           // "Read the pictogram and answer"
+  | 'read_chart'               // "Read the bar chart and answer"
+  | 'read_scratch'             // "Look at the Scratch code and answer"
+  | 'debug_scratch'            // "Find the bug in the Scratch code"
+  | 'grid_trace';              // "Trace the algorithm on the grid"
 
 export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   define: 'Define',
@@ -35,7 +41,35 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   long_answer: 'Long Answer',
   advantages_disadvantages: 'Advantages & Disadvantages',
   mcq: 'Multiple Choice',
+  read_pictogram: 'Read the Pictogram',
+  read_chart: 'Read the Chart',
+  read_scratch: 'Read Scratch Code',
+  debug_scratch: 'Debug Scratch Code',
+  grid_trace: 'Grid Trace',
 };
+
+// ── Image support ───────────────────────────────────────────────────────────
+
+export type ImageKind =
+  | 'pictogram'       // Programmatic SVG — picture graph with icons
+  | 'bar_chart'       // Programmatic SVG — vertical/horizontal bar chart
+  | 'number_line'     // Programmatic SVG — number line with markers
+  | 'tally_chart'     // Programmatic SVG — tally marks table
+  | 'scratch_blocks'  // Programmatic SVG — Scratch coding blocks
+  | 'grid_path';      // Programmatic SVG — grid with colored path cells
+
+export interface QuestionImage {
+  kind: ImageKind;
+  prompt: string;             // What to generate (data spec for SVG, text prompt for AI)
+  svgData?: string;           // Filled client-side for SVG types
+  base64Data?: string;        // Filled by API for AI types
+  alt: string;                // Accessibility / print alt text
+}
+
+/** Question types that always require an image */
+export const IMAGE_QUESTION_TYPES: QuestionType[] = [
+  'read_pictogram', 'read_chart', 'read_scratch', 'debug_scratch', 'grid_trace',
+];
 
 // ── Flexible question shape ─────────────────────────────────────────────────
 
@@ -52,6 +86,8 @@ export interface FlexibleQuestion {
   tableRows?: string[][];     // Table body rows
   answerLines?: number;       // Blank lines to leave for student answer
   answer: string | string[];  // Answer key (string or array for tables)
+  // Image support (Phase 2)
+  image?: QuestionImage;      // Optional image for this question
 }
 
 // ── Section model ───────────────────────────────────────────────────────────
@@ -201,6 +237,32 @@ function questionTypeExamples(type: QuestionType): string {
       return `"tableHeaders": ["Advantages", "Disadvantages"]. Students fill in both columns. Answer: list of advantages and disadvantages.`;
     case 'mcq':
       return `"options" is an array of 4 choices: ["A) ...", "B) ...", "C) ...", "D) ..."]. Answer: the correct letter.`;
+    case 'read_pictogram':
+      return `The question references a pictogram (picture graph). You MUST include an "image" field:
+"image": { "kind": "pictogram", "prompt": "title: Favourite Fruits; key: 1 icon = 2 students; data: Apple=6, Banana=8, Mango=4, Orange=10", "alt": "Pictogram showing favourite fruits of students" }
+The "prompt" field must specify: title, key (what each icon represents), and data (label=value pairs).
+Ask 2-3 sub-questions about the pictogram data (reading values, comparing, totals). Set "answerLines": 4.`;
+    case 'read_chart':
+      return `The question references a bar chart. You MUST include an "image" field:
+"image": { "kind": "bar_chart", "prompt": "title: Monthly Rainfall; xLabel: Month; yLabel: Rainfall (mm); data: Jan=30, Feb=20, Mar=45, Apr=60, May=50", "alt": "Bar chart showing monthly rainfall" }
+The "prompt" field must specify: title, axis labels, and data (label=value pairs).
+Ask 2-3 sub-questions about reading values, comparing bars, finding highest/lowest. Set "answerLines": 4.`;
+    case 'read_scratch':
+      return `The question shows Scratch coding blocks and asks students to read/analyze the code. You MUST include an "image" field:
+"image": { "kind": "scratch_blocks", "prompt": "when green flag clicked\\nrepeat 4\\n  move 100 steps\\n  turn right 90 degrees\\nend", "alt": "Scratch code blocks" }
+The "prompt" field contains one Scratch block per line. Indented lines (2 spaces) are inside C-shaped blocks (repeat/forever). "end" closes a C-block.
+Block types detected automatically: events (when...), motion (move/turn/glide), control (repeat/forever/stop/wait), looks (say/show/hide/size).
+Ask about what the code does, what shape it draws, how many times something repeats, or what the output is. Set "answerLines": 3.`;
+    case 'debug_scratch':
+      return `The question shows Scratch coding blocks alongside an algorithm, and asks students to find the bug. You MUST include an "image" field:
+"image": { "kind": "scratch_blocks", "prompt": "when green flag clicked\\nmove 100 steps\\nturn right 80 degrees\\nmove 100 steps\\nturn right 90 degrees\\nstop all", "alt": "Scratch code with a bug" }
+Provide a text algorithm in the question that DIFFERS from the Scratch blocks in one specific way (the bug).
+Ask the student to identify the bug/difference. Set "answerLines": 2.`;
+    case 'grid_trace':
+      return `The question shows a grid and asks students to trace an algorithm path. You MUST include an "image" field:
+"image": { "kind": "grid_path", "prompt": "rows: 6; cols: 6; start: 1:1; end: 4:5; path: 1:1, 1:2, 1:3, 2:3, 3:3, 3:4, 3:5, 4:5", "alt": "Grid showing algorithm path" }
+The "prompt" uses row:col format (1-indexed). "path" lists the cells to color.
+Ask about the path, direction changes, or have students write the algorithm that produces the path. Set "answerLines": 4.`;
   }
 }
 
@@ -310,6 +372,20 @@ Each question in a section's "questions" array:
 
 Only include fields relevant to the question type. Always include: number, type, text, marks, answer.
 
+## Image Field (for image-dependent question types)
+For question types "read_pictogram", "read_chart", "read_scratch", "debug_scratch", and "grid_trace", you MUST include an "image" field:
+{
+  "image": {
+    "kind": "pictogram" | "bar_chart" | "scratch_blocks" | "grid_path",
+    "prompt": "Specification for image generation (see type examples above)",
+    "alt": "Accessibility description of the image"
+  }
+}
+- For "read_pictogram": kind must be "pictogram", prompt has title, key, and data
+- For "read_chart": kind must be "bar_chart", prompt has title, axis labels, and data
+- For "read_scratch" and "debug_scratch": kind must be "scratch_blocks", prompt has one block per line (newline-separated), indented lines inside C-blocks, "end" closes C-blocks
+- For "grid_trace": kind must be "grid_path", prompt has rows, cols, start, end, and path (row:col pairs)
+
 ## Rules
 - Questions must be based ONLY on the provided chapter content
 - Use clear, age-appropriate language for ${input.grade} students
@@ -320,6 +396,10 @@ Only include fields relevant to the question type. Always include: number, type,
 - For match types, shuffle the right column so it doesn't align with the left
 - Answer key must be complete and accurate
 - Question numbers restart at 1 within each section
+- For image question types, the "image" field is REQUIRED — never omit it
+- Pictogram/chart data in the image prompt must be based on the chapter content
+- Scratch block prompts must use real Scratch block names (move, turn, repeat, etc.)
+- Grid path coordinates use 1-indexed row:col format
 
 Return ONLY the JSON object.`;
 }
@@ -359,6 +439,17 @@ export function parseQuestionPaperResponse(response: string): QuestionPaperOutpu
       // Ensure questions array exists
       if (!section.questions) {
         section.questions = [];
+      }
+      // Normalize image fields on questions
+      for (const q of section.questions) {
+        if (q.image) {
+          // Ensure required image fields exist
+          if (!q.image.kind || !q.image.prompt) {
+            delete (q as unknown as Record<string, unknown>).image;
+          } else if (!q.image.alt) {
+            q.image.alt = q.image.prompt.slice(0, 100);
+          }
+        }
       }
     }
 
