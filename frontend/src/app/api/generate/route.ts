@@ -6,6 +6,8 @@ import { buildQuestionPaperPrompt } from '@/lib/prompts/question-paper-prompt';
 import type { SectionConfig, PaperFormat } from '@/lib/prompts/question-paper-prompt';
 import { buildFeedbackPrompt, type FeedbackRequest } from '@/lib/prompts/feedback-prompt';
 
+export const maxDuration = 60;
+
 export type GenerationType = 'lesson_plan' | 'question_paper' | 'feedback';
 
 export type { FeedbackRequest };
@@ -96,9 +98,25 @@ export async function POST(request: NextRequest): Promise<NextResponse<GenerateR
       },
     });
 
-    const response = await client.send(command);
+    const MAX_RETRIES = 3;
+    let response;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        response = await client.send(command);
+        break;
+      } catch (err: unknown) {
+        const isThrottled =
+          (err as { name?: string })?.name === 'ThrottlingException' ||
+          (err as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode === 429;
+        if (isThrottled && attempt < MAX_RETRIES - 1) {
+          await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
+          continue;
+        }
+        throw err;
+      }
+    }
 
-    const content = response.output?.message?.content?.[0];
+    const content = response!.output?.message?.content?.[0];
     if (!content || !('text' in content)) {
       return NextResponse.json(
         { success: false, error: 'No content in response' },
@@ -110,8 +128,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<GenerateR
       success: true,
       content: content.text,
       tokensUsed: {
-        input: response.usage?.inputTokens || 0,
-        output: response.usage?.outputTokens || 0,
+        input: response!.usage?.inputTokens || 0,
+        output: response!.usage?.outputTokens || 0,
       },
     });
   } catch (error) {

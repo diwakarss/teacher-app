@@ -214,8 +214,14 @@ export const questionPaperService = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to generate question paper');
+      let errorMsg = `Failed to generate question paper (${response.status})`;
+      try {
+        const error = await response.json();
+        errorMsg = error.error || errorMsg;
+      } catch {
+        // Response wasn't JSON (e.g. HTML error page from timeout)
+      }
+      throw new Error(errorMsg);
     }
 
     const data = await response.json();
