@@ -328,9 +328,19 @@ export function UploadDialog({ open, onOpenChange, subjectId }: UploadDialogProp
         }
       }
 
-      // Brief delay between pages to avoid API throttling
-      if (scanSuccess && i < count - 1) {
-        await new Promise((r) => setTimeout(r, 1000));
+      if (i < count - 1) {
+        if (scanSuccess) {
+          // Delay between pages to avoid API throttling
+          await new Promise((r) => setTimeout(r, 1500));
+        } else {
+          // Longer cooldown after a failed page before trying the next one
+          dispatch({
+            type: 'SET_PROGRESS',
+            progress: Math.round(((i * 2 + 1) / (count * 2)) * 100),
+            text: `Cooling down before next page...`,
+          });
+          await new Promise((r) => setTimeout(r, 8000));
+        }
       }
     }
 
