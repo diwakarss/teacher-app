@@ -238,58 +238,99 @@ export function UploadDialog({ open, onOpenChange, subjectId }: UploadDialogProp
     for (let i = 0; i < count; i++) {
       const pageNum = start + i;
 
+      // Render page image for preview
+      dispatch({
+        type: 'SET_PROGRESS',
+        progress: Math.round(((i * 2) / (count * 2)) * 100),
+        text: `Rendering page ${i + 1} of ${count}...`,
+      });
+
+      let dataUrl: string;
+      let base64: string;
       try {
-        // Render page image for preview
-        dispatch({
-          type: 'SET_PROGRESS',
-          progress: Math.round(((i * 2) / (count * 2)) * 100),
-          text: `Rendering page ${i + 1} of ${count}...`,
-        });
-
-        const dataUrl = await renderPageToDataUrl(pageNum, 1.5);
+        dataUrl = await renderPageToDataUrl(pageNum, 1.5);
         dispatch({ type: 'SET_PAGE_IMAGE', index: i, dataUrl });
-
-        // Get base64 for API (higher resolution)
-        const base64 = await renderPageToBase64(pageNum, 2.0);
-
-        // Scan with Claude Vision
-        dispatch({ type: 'SET_PAGE_SCANNING', index: i, scanning: true });
-        dispatch({
-          type: 'SET_PROGRESS',
-          progress: Math.round(((i * 2 + 1) / (count * 2)) * 100),
-          text: `Scanning page ${i + 1} of ${count} with AI...`,
-        });
-
-        // Auto-advance to show current page being scanned
-        dispatch({ type: 'SET_CURRENT_PAGE', index: i });
-
-        const response = await fetch('/api/scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64, pageNumber: pageNum }),
-        });
-
-        const result = await response.json();
-
-        if (result.success && result.data) {
-          dispatch({
-            type: 'SET_PAGE_EXTRACTION',
-            index: i,
-            extraction: result.data,
-          });
-        } else {
-          const errorMsg = result.error || 'Scan failed';
-          dispatch({ type: 'SET_PAGE_ERROR', index: i, error: errorMsg });
-          // Stop on first error (likely a config/model issue that will repeat)
-          toast.error(`Scanning stopped: ${errorMsg}`);
-          break;
-        }
+        base64 = await renderPageToBase64(pageNum, 2.0);
       } catch (error) {
-        console.error(`Failed to process page ${pageNum}:`, error);
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`Failed to render page ${pageNum}:`, error);
+        const errorMsg = error instanceof Error ? error.message : 'Render failed';
         dispatch({ type: 'SET_PAGE_ERROR', index: i, error: errorMsg });
-        toast.error(`Scanning stopped: ${errorMsg}`);
-        break;
+        toast.error(`Page ${pageNum}: ${errorMsg}`);
+        continue;
+      }
+
+      // Scan with Claude Vision
+      dispatch({ type: 'SET_PAGE_SCANNING', index: i, scanning: true });
+      dispatch({
+        type: 'SET_PROGRESS',
+        progress: Math.round(((i * 2 + 1) / (count * 2)) * 100),
+        text: `Scanning page ${i + 1} of ${count} with AI...`,
+      });
+
+      dispatch({ type: 'SET_CURRENT_PAGE', index: i });
+
+      const MAX_PAGE_RETRIES = 3;
+      let scanSuccess = false;
+
+      for (let attempt = 0; attempt < MAX_PAGE_RETRIES; attempt++) {
+        try {
+          if (attempt > 0) {
+            dispatch({
+              type: 'SET_PROGRESS',
+              progress: Math.round(((i * 2 + 1) / (count * 2)) * 100),
+              text: `Retrying page ${i + 1} of ${count} (attempt ${attempt + 1})...`,
+            });
+            await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
+          }
+
+          const response = await fetch('/api/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64, pageNumber: pageNum }),
+          });
+
+          if (!response.ok) {
+            let errorMsg = `Server error (${response.status})`;
+            try {
+              const errBody = await response.json();
+              errorMsg = errBody.error || errorMsg;
+            } catch {
+              // Response wasn't JSON (e.g. HTML error page)
+            }
+            if (attempt < MAX_PAGE_RETRIES - 1) continue;
+            dispatch({ type: 'SET_PAGE_ERROR', index: i, error: errorMsg });
+            toast.error(`Page ${pageNum} failed: ${errorMsg}`);
+            break;
+          }
+
+          const result = await response.json();
+
+          if (result.success && result.data) {
+            dispatch({
+              type: 'SET_PAGE_EXTRACTION',
+              index: i,
+              extraction: result.data,
+            });
+            scanSuccess = true;
+            break;
+          } else {
+            const errorMsg = result.error || 'Scan failed';
+            if (attempt < MAX_PAGE_RETRIES - 1) continue;
+            dispatch({ type: 'SET_PAGE_ERROR', index: i, error: errorMsg });
+            toast.error(`Page ${pageNum} failed: ${errorMsg}`);
+          }
+        } catch (error) {
+          console.error(`Page ${pageNum} attempt ${attempt + 1} failed:`, error);
+          if (attempt < MAX_PAGE_RETRIES - 1) continue;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          dispatch({ type: 'SET_PAGE_ERROR', index: i, error: errorMsg });
+          toast.error(`Page ${pageNum} failed: ${errorMsg}`);
+        }
+      }
+
+      // Brief delay between pages to avoid API throttling
+      if (scanSuccess && i < count - 1) {
+        await new Promise((r) => setTimeout(r, 1000));
       }
     }
 

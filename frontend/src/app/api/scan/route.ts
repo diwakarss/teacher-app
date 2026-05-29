@@ -5,7 +5,7 @@ import { createBedrockClient } from '@/lib/bedrock-client';
 // Claude Sonnet 4.6 - latest model with vision support
 const SCAN_MODEL_ID = 'us.anthropic.claude-sonnet-4-6';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 interface ScanRequest {
   image: string; // raw base64 JPEG, no data: prefix
@@ -92,9 +92,25 @@ export async function POST(request: NextRequest): Promise<NextResponse<ScanRespo
       },
     });
 
-    const response = await client.send(command);
+    const MAX_RETRIES = 3;
+    let response;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        response = await client.send(command);
+        break;
+      } catch (err: unknown) {
+        const isThrottled =
+          (err as { name?: string })?.name === 'ThrottlingException' ||
+          (err as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode === 429;
+        if (isThrottled && attempt < MAX_RETRIES - 1) {
+          await new Promise((r) => setTimeout(r, 2000 * Math.pow(2, attempt)));
+          continue;
+        }
+        throw err;
+      }
+    }
 
-    const content = response.output?.message?.content?.[0];
+    const content = response!.output?.message?.content?.[0];
     if (!content || !('text' in content) || !content.text) {
       return NextResponse.json(
         { success: false, error: 'No content in response' },
@@ -129,8 +145,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<ScanRespo
       data: extraction,
       pageNumber: body.pageNumber,
       tokensUsed: {
-        input: response.usage?.inputTokens || 0,
-        output: response.usage?.outputTokens || 0,
+        input: response!.usage?.inputTokens || 0,
+        output: response!.usage?.outputTokens || 0,
       },
     });
   } catch (error) {
