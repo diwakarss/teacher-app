@@ -33,9 +33,16 @@ export async function getDb(): Promise<Database> {
   return dbInstance;
 }
 
+let lastDataChangeTime = 0;
+
+export function getLastDataChangeTime(): number {
+  return lastDataChangeTime;
+}
+
 export async function persistDb(): Promise<void> {
   if (!dbInstance) return;
 
+  lastDataChangeTime = Date.now();
   const data = dbInstance.export();
   await saveDatabase(data);
 }
