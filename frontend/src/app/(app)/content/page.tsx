@@ -43,13 +43,14 @@ export default function ContentPage() {
       if (activeClassId) {
         const subs = await subjectService.getByClassId(activeClassId);
         setSubjects(subs);
-        if (subs.length > 0 && !selectedSubjectId) {
-          setSelectedSubjectId(subs[0].id);
-        }
+        setSelectedSubjectId(subs.length > 0 ? subs[0].id : null);
+      } else {
+        setSubjects([]);
+        setSelectedSubjectId(null);
       }
     }
     loadSubjects();
-  }, [activeClassId, selectedSubjectId]);
+  }, [activeClassId]);
 
   useEffect(() => {
     if (selectedSubjectId) {
