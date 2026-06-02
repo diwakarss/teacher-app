@@ -5,7 +5,7 @@
  * Aligns with actual Drizzle schema in lib/db/schema.ts
  */
 
-import { getDb, persistDb } from '@/lib/db/database';
+import { getDb, persistDb, initializeDb } from '@/lib/db/database';
 import type {
   Class,
   Subject,
@@ -14,6 +14,7 @@ import type {
   Mark,
   Feedback,
   Chapter,
+  ChapterPage,
   LessonPlan,
   QuestionPaper,
 } from '@/lib/db/schema';
@@ -31,6 +32,7 @@ export interface ExportData {
     marks: Mark[];
     feedback: Feedback[];
     chapters: Chapter[];
+    chapterPages?: ChapterPage[];
     lessonPlans: LessonPlan[];
     questionPapers: QuestionPaper[];
   };
@@ -49,6 +51,7 @@ export interface ValidationResult {
     marks: number;
     feedback: number;
     chapters: number;
+    chapterPages: number;
     lessonPlans: number;
     questionPapers: number;
   };
@@ -65,6 +68,7 @@ export interface ImportResult {
     marks: number;
     feedback: number;
     chapters: number;
+    chapterPages: number;
     lessonPlans: number;
     questionPapers: number;
   };
@@ -160,6 +164,18 @@ function mapRowToChapter(row: Record<string, unknown>): Chapter {
   };
 }
 
+function mapRowToChapterPage(row: Record<string, unknown>): ChapterPage {
+  return {
+    id: row.id as string,
+    chapterId: row.chapter_id as string,
+    pageNumber: row.page_number as number,
+    extraction: row.extraction as string,
+    teacherCorrections: (row.teacher_corrections as string) || null,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
 function mapRowToLessonPlan(row: Record<string, unknown>): LessonPlan {
   return {
     id: row.id as string,
@@ -207,6 +223,7 @@ export const exportService = {
       { name: 'marks', mapper: mapRowToMark },
       { name: 'feedback', mapper: mapRowToFeedback },
       { name: 'chapters', mapper: mapRowToChapter },
+      { name: 'chapter_pages', mapper: mapRowToChapterPage },
       { name: 'lesson_plans', mapper: mapRowToLessonPlan },
       { name: 'question_papers', mapper: mapRowToQuestionPaper },
     ];
@@ -244,6 +261,7 @@ export const exportService = {
         marks: results.marks as Mark[],
         feedback: results.feedback as Feedback[],
         chapters: results.chapters as Chapter[],
+        chapterPages: results.chapter_pages as ChapterPage[],
         lessonPlans: results.lesson_plans as LessonPlan[],
         questionPapers: results.question_papers as QuestionPaper[],
       },
@@ -295,6 +313,7 @@ export const exportService = {
             marks: 0,
             feedback: 0,
             chapters: 0,
+            chapterPages: 0,
             lessonPlans: 0,
             questionPapers: 0,
           },
@@ -361,6 +380,7 @@ export const exportService = {
           marks: data.data.marks?.length || 0,
           feedback: data.data.feedback?.length || 0,
           chapters: data.data.chapters?.length || 0,
+          chapterPages: data.data.chapterPages?.length || 0,
           lessonPlans: data.data.lessonPlans?.length || 0,
           questionPapers: data.data.questionPapers?.length || 0,
         },
@@ -380,6 +400,7 @@ export const exportService = {
           marks: 0,
           feedback: 0,
           chapters: 0,
+          chapterPages: 0,
           lessonPlans: 0,
           questionPapers: 0,
         },
@@ -400,17 +421,24 @@ export const exportService = {
       marks: 0,
       feedback: 0,
       chapters: 0,
+      chapterPages: 0,
       lessonPlans: 0,
       questionPapers: 0,
     };
 
+    // Coerce undefined to null for SQLite compatibility
+    const n = (v: unknown) => (v === undefined || v === null ? null : v);
+
     try {
       const text = await file.text();
       const data = JSON.parse(text) as ExportData;
-      const db = await getDb();
+
+      // Ensure tables exist (critical for restore on a new device)
+      const db = await initializeDb();
 
       // If replace strategy, clear all existing data (in correct order for FK constraints)
       if (strategy === 'replace') {
+        db.run('DELETE FROM chapter_pages');
         db.run('DELETE FROM marks');
         db.run('DELETE FROM feedback');
         db.run('DELETE FROM assessments');
@@ -424,120 +452,123 @@ export const exportService = {
 
       const now = new Date().toISOString();
 
-      // Import classes
       for (const cls of data.data.classes || []) {
         try {
           db.run(
             `INSERT OR REPLACE INTO classes (id, name, academic_year, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-            [cls.id, cls.name, cls.academicYear, cls.createdAt || now, now]
+            [cls.id, cls.name, n(cls.academicYear) || '', n(cls.createdAt) || now, now]
           );
           imported.classes++;
         } catch (e) {
-          errors.push(`Failed to import class "${cls.name}": ${e}`);
+          errors.push(`Class "${cls.name}": ${e}`);
         }
       }
 
-      // Import subjects
       for (const subject of data.data.subjects || []) {
         try {
           db.run(
             `INSERT OR REPLACE INTO subjects (id, name, class_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-            [subject.id, subject.name, subject.classId, subject.createdAt || now, now]
+            [subject.id, subject.name, subject.classId, n(subject.createdAt) || now, now]
           );
           imported.subjects++;
         } catch (e) {
-          errors.push(`Failed to import subject "${subject.name}": ${e}`);
+          errors.push(`Subject "${subject.name}": ${e}`);
         }
       }
 
-      // Import students
       for (const student of data.data.students || []) {
         try {
           db.run(
             `INSERT OR REPLACE INTO students (id, name, roll_number, class_id, parent_name, parent_phone, parent_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [student.id, student.name, student.rollNumber, student.classId, student.parentName || null, student.parentPhone || null, student.parentEmail || null, student.createdAt || now, now]
+            [student.id, student.name, student.rollNumber, student.classId, n(student.parentName), n(student.parentPhone), n(student.parentEmail), n(student.createdAt) || now, now]
           );
           imported.students++;
         } catch (e) {
-          errors.push(`Failed to import student "${student.name}": ${e}`);
+          errors.push(`Student "${student.name}": ${e}`);
         }
       }
 
-      // Import assessments
       for (const assessment of data.data.assessments || []) {
         try {
           db.run(
             `INSERT OR REPLACE INTO assessments (id, name, type, subject_id, class_id, max_marks, date, term, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [assessment.id, assessment.name, assessment.type, assessment.subjectId, assessment.classId, assessment.maxMarks, assessment.date, assessment.term, assessment.createdAt || now, now]
+            [assessment.id, assessment.name, assessment.type, assessment.subjectId, assessment.classId, n(assessment.maxMarks) || 0, n(assessment.date) || now, n(assessment.term) || 1, n(assessment.createdAt) || now, now]
           );
           imported.assessments++;
         } catch (e) {
-          errors.push(`Failed to import assessment "${assessment.name}": ${e}`);
+          errors.push(`Assessment "${assessment.name}": ${e}`);
         }
       }
 
-      // Import marks
       for (const mark of data.data.marks || []) {
         try {
           db.run(
             `INSERT OR REPLACE INTO marks (id, student_id, assessment_id, marks_obtained, remarks, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [mark.id, mark.studentId, mark.assessmentId, mark.marksObtained, mark.remarks || null, mark.createdAt || now, now]
+            [mark.id, mark.studentId, mark.assessmentId, n(mark.marksObtained) ?? 0, n(mark.remarks), n(mark.createdAt) || now, now]
           );
           imported.marks++;
         } catch (e) {
-          errors.push(`Failed to import mark: ${e}`);
+          errors.push(`Mark (student=${mark.studentId}): ${e}`);
         }
       }
 
-      // Import feedback
       for (const fb of data.data.feedback || []) {
         try {
           db.run(
             `INSERT OR REPLACE INTO feedback (id, student_id, assessment_id, message, tone, performance_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [fb.id, fb.studentId, fb.assessmentId, fb.message, fb.tone, fb.performanceLevel, fb.createdAt || now]
+            [fb.id, fb.studentId, fb.assessmentId, fb.message, n(fb.tone) || 'neutral', n(fb.performanceLevel) || 'average', n(fb.createdAt) || now]
           );
           imported.feedback++;
         } catch (e) {
-          errors.push(`Failed to import feedback: ${e}`);
+          errors.push(`Feedback: ${e}`);
         }
       }
 
-      // Import chapters
       for (const chapter of data.data.chapters || []) {
         try {
           db.run(
             `INSERT OR REPLACE INTO chapters (id, subject_id, name, chapter_number, content, page_count, source_type, difficulty, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [chapter.id, chapter.subjectId, chapter.name, chapter.chapterNumber, chapter.content, chapter.pageCount || null, chapter.sourceType, chapter.difficulty || null, chapter.createdAt || now, now]
+            [chapter.id, chapter.subjectId, chapter.name, n(chapter.chapterNumber) || 1, chapter.content, n(chapter.pageCount), n(chapter.sourceType) || 'pdf', n(chapter.difficulty), n(chapter.createdAt) || now, now]
           );
           imported.chapters++;
         } catch (e) {
-          errors.push(`Failed to import chapter "${chapter.name}": ${e}`);
+          errors.push(`Chapter "${chapter.name}": ${e}`);
         }
       }
 
-      // Import lesson plans
+      for (const cp of data.data.chapterPages || []) {
+        try {
+          db.run(
+            `INSERT OR REPLACE INTO chapter_pages (id, chapter_id, page_number, extraction, teacher_corrections, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [cp.id, cp.chapterId, cp.pageNumber, cp.extraction, n(cp.teacherCorrections), n(cp.createdAt) || now, n(cp.updatedAt) || now]
+          );
+          imported.chapterPages++;
+        } catch (e) {
+          errors.push(`ChapterPage: ${e}`);
+        }
+      }
+
       for (const lp of data.data.lessonPlans || []) {
         try {
           db.run(
             `INSERT OR REPLACE INTO lesson_plans (id, chapter_id, subject_id, name, duration, objectives, sections, materials, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [lp.id, lp.chapterId, lp.subjectId, lp.name, lp.duration, lp.objectives, lp.sections, lp.materials || null, lp.createdAt || now, now]
+            [lp.id, lp.chapterId, lp.subjectId, lp.name, lp.duration, lp.objectives, lp.sections, n(lp.materials), n(lp.createdAt) || now, now]
           );
           imported.lessonPlans++;
         } catch (e) {
-          errors.push(`Failed to import lesson plan "${lp.name}": ${e}`);
+          errors.push(`Lesson plan "${lp.name}": ${e}`);
         }
       }
 
-      // Import question papers
       for (const qp of data.data.questionPapers || []) {
         try {
           db.run(
             `INSERT OR REPLACE INTO question_papers (id, subject_id, chapter_ids, name, total_marks, duration, difficulty, template, sections, answer_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [qp.id, qp.subjectId, qp.chapterIds, qp.name, qp.totalMarks, qp.duration, qp.difficulty, qp.template, qp.sections, qp.answerKey, qp.createdAt || now, now]
+            [qp.id, qp.subjectId, qp.chapterIds, qp.name, n(qp.totalMarks) || 0, n(qp.duration) || 0, n(qp.difficulty) || 'mixed', n(qp.template) || 'custom', qp.sections, n(qp.answerKey) || '[]', n(qp.createdAt) || now, now]
           );
           imported.questionPapers++;
         } catch (e) {
-          errors.push(`Failed to import question paper "${qp.name}": ${e}`);
+          errors.push(`Question paper "${qp.name}": ${e}`);
         }
       }
 
