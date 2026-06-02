@@ -156,13 +156,22 @@ export function CloudSync() {
       // Import using export service
       const result = await exportService.importData(file, restoreStrategy);
 
+      const counts = [
+        result.imported.classes && `${result.imported.classes} classes`,
+        result.imported.students && `${result.imported.students} students`,
+        result.imported.chapters && `${result.imported.chapters} chapters`,
+        result.imported.marks && `${result.imported.marks} marks`,
+      ].filter(Boolean).join(', ');
+
       if (result.success) {
-        setMessage({
-          type: 'success',
-          text: `Restored ${result.imported.classes} classes, ${result.imported.students} students, ${result.imported.marks} marks`,
-        });
+        setMessage({ type: 'success', text: `Restored ${counts}` });
       } else {
-        setMessage({ type: 'error', text: `Restore completed with ${result.errors.length} errors` });
+        const errorSample = result.errors.slice(0, 5).join('; ');
+        const moreText = result.errors.length > 5 ? ` (+${result.errors.length - 5} more)` : '';
+        setMessage({
+          type: result.imported.classes > 0 ? 'success' : 'error',
+          text: `Restored ${counts || 'no records'}. ${result.errors.length} errors: ${errorSample}${moreText}`,
+        });
       }
     } catch (error) {
       console.error('Restore failed:', error);
