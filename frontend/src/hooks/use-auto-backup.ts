@@ -24,7 +24,8 @@ export function useAutoBackup() {
       try {
         await driveService.uploadBackup();
         lastBackupChangeTime.current = lastChange;
-        console.log('[auto-backup] Backed up to Google Drive');
+        const deleted = await driveService.cleanupOldBackups();
+        console.log(`[auto-backup] Backed up to Google Drive${deleted ? `, cleaned up ${deleted} old backups` : ''}`);
       } catch (e) {
         console.error('[auto-backup] Failed:', e);
       } finally {

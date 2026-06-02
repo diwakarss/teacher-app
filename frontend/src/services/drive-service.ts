@@ -18,7 +18,10 @@ export interface DriveFile {
   createdTime: string;
   modifiedTime: string;
   size: string;
+  pinned: boolean;
 }
+
+const MAX_UNPINNED_BACKUPS = 5;
 
 export interface DriveAuthState {
   isAuthenticated: boolean;
@@ -330,6 +333,7 @@ export const driveService = {
       createdTime: file.createdTime || new Date().toISOString(),
       modifiedTime: file.modifiedTime || new Date().toISOString(),
       size: String(multipartBody.length),
+      pinned: false,
     };
   },
 
@@ -346,7 +350,7 @@ export const driveService = {
       const folderId = await this.getOrCreateBackupFolder();
 
       const response = await fetch(
-        `${DRIVE_API_BASE}/files?q='${folderId}' in parents and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,modifiedTime,size)`,
+        `${DRIVE_API_BASE}/files?q='${folderId}' in parents and trashed=false&orderBy=createdTime desc&fields=files(id,name,createdTime,modifiedTime,size,appProperties)`,
         {
           headers: { Authorization: `Bearer ${auth.accessToken}` },
         }
@@ -357,12 +361,13 @@ export const driveService = {
       }
 
       const result = await response.json();
-      return (result.files || []).map((f: DriveFile) => ({
+      return (result.files || []).map((f: DriveFile & { appProperties?: { pinned?: string } }) => ({
         id: f.id,
         name: f.name,
         createdTime: f.createdTime,
         modifiedTime: f.modifiedTime,
         size: f.size || '0',
+        pinned: f.appProperties?.pinned === 'true',
       }));
     } catch (e) {
       console.error('Failed to list backups:', e);
@@ -413,6 +418,47 @@ export const driveService = {
     if (!response.ok) {
       throw new Error('Failed to delete backup');
     }
+  },
+
+  /**
+   * Pin/unpin a backup to protect it from auto-cleanup
+   */
+  async setPinned(fileId: string, pinned: boolean): Promise<void> {
+    const auth = this.getAuthState();
+    if (!auth.isAuthenticated || !auth.accessToken) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${DRIVE_API_BASE}/files/${fileId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${auth.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ appProperties: { pinned: pinned ? 'true' : 'false' } }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update backup');
+    }
+  },
+
+  /**
+   * Delete old unpinned backups, keeping the most recent N
+   */
+  async cleanupOldBackups(): Promise<number> {
+    const backups = await this.listBackups();
+    const unpinned = backups.filter((b) => !b.pinned);
+    const toDelete = unpinned.slice(MAX_UNPINNED_BACKUPS);
+
+    for (const backup of toDelete) {
+      try {
+        await this.deleteBackup(backup.id);
+      } catch (e) {
+        console.error(`[cleanup] Failed to delete ${backup.name}:`, e);
+      }
+    }
+    return toDelete.length;
   },
 
   /**

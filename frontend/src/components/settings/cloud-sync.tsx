@@ -28,6 +28,8 @@ import {
   RefreshCw,
   Settings,
   User,
+  Pin,
+  PinOff,
 } from 'lucide-react';
 import { driveService, type DriveFile, type DriveAuthState } from '@/services/drive-service';
 import { exportService } from '@/services/export-service';
@@ -199,6 +201,16 @@ export function CloudSync() {
     } finally {
       setLoading(false);
       setSelectedBackup(null);
+    }
+  };
+
+  const handleTogglePin = async (backup: DriveFile) => {
+    try {
+      await driveService.setPinned(backup.id, !backup.pinned);
+      await loadBackups();
+    } catch (error) {
+      console.error('Pin toggle failed:', error);
+      setMessage({ type: 'error', text: 'Failed to update pin' });
     }
   };
 
@@ -441,12 +453,27 @@ export function CloudSync() {
                     className="flex items-center justify-between rounded-lg border p-3"
                   >
                     <div>
-                      <p className="font-medium">{backup.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        {backup.pinned && <Pin className="h-3.5 w-3.5 text-blue-500" />}
+                        <p className="font-medium">{backup.name}</p>
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {formatDate(backup.createdTime)} • {formatFileSize(backup.size)}
                       </p>
                     </div>
                     <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleTogglePin(backup)}
+                        title={backup.pinned ? 'Unpin backup' : 'Pin backup'}
+                      >
+                        {backup.pinned ? (
+                          <PinOff className="h-4 w-4 text-blue-500" />
+                        ) : (
+                          <Pin className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
