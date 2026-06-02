@@ -35,9 +35,7 @@ const AUTH_STATE_KEY = 'drive-auth-state';
 const TOKEN_KEY = 'drive-access-token';
 const TOKEN_EXPIRY_KEY = 'drive-token-expiry';
 
-// Client ID should be configured in environment or settings
-// For now, we'll use a placeholder that users can configure
-let CLIENT_ID = '';
+let CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 
 export const driveService = {
   /**
@@ -51,13 +49,20 @@ export const driveService = {
   },
 
   /**
-   * Get the configured client ID
+   * Get the configured client ID (env var takes precedence, then localStorage)
    */
   getClientId(): string {
     if (!CLIENT_ID && typeof window !== 'undefined') {
-      CLIENT_ID = localStorage.getItem('drive-client-id') || '';
+      CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || localStorage.getItem('drive-client-id') || '';
     }
     return CLIENT_ID;
+  },
+
+  /**
+   * Check if client ID came from environment (pre-configured)
+   */
+  isPreConfigured(): boolean {
+    return !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   },
 
   /**
@@ -263,6 +268,15 @@ export const driveService = {
 
     // Get backup data
     const data = await exportService.exportAll();
+
+    const totalRecords = Object.values(data.data).reduce(
+      (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
+      0
+    );
+    if (totalRecords === 0) {
+      throw new Error('No data to backup. Add some classes, students, or content first.');
+    }
+
     const folderId = await this.getOrCreateBackupFolder();
 
     // Create filename with timestamp

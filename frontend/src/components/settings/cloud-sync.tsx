@@ -55,6 +55,8 @@ export function CloudSync() {
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [isPreConfigured] = useState(() => driveService.isPreConfigured());
+
   // Initialize state
   useEffect(() => {
     const configured = driveService.isConfigured();
@@ -202,8 +204,8 @@ export function CloudSync() {
     return new Date(dateString).toLocaleString();
   };
 
-  // Not configured - show setup
-  if (!isConfigured || showConfig) {
+  // Not configured - show setup (skip if pre-configured via env var)
+  if ((!isConfigured && !isPreConfigured) || (showConfig && !isPreConfigured)) {
     return (
       <Card>
         <CardHeader>
@@ -321,10 +323,12 @@ export function CloudSync() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setShowConfig(true)}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Config
-                </Button>
+                {!isPreConfigured && (
+                  <Button variant="outline" size="sm" onClick={() => setShowConfig(true)}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Config
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Disconnect

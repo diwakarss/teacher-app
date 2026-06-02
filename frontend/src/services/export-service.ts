@@ -5,7 +5,7 @@
  * Aligns with actual Drizzle schema in lib/db/schema.ts
  */
 
-import { getDb } from '@/lib/db/database';
+import { getDb, persistDb } from '@/lib/db/database';
 import type {
   Class,
   Subject,
@@ -540,6 +540,8 @@ export const exportService = {
           errors.push(`Failed to import question paper "${qp.name}": ${e}`);
         }
       }
+
+      await persistDb();
 
       return {
         success: errors.length === 0,
