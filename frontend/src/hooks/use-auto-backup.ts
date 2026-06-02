@@ -5,9 +5,10 @@ import { driveService } from '@/services/drive-service';
 import { getLastDataChangeTime } from '@/lib/db/database';
 
 const AUTO_BACKUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const LOCK_KEY = 'auto-backup-last-run';
+const MIN_GAP = 4 * 60 * 1000; // Don't backup if another tab backed up within 4 min
 
 export function useAutoBackup() {
-  const lastBackupChangeTime = useRef(0);
   const backingUp = useRef(false);
 
   useEffect(() => {
@@ -18,14 +19,21 @@ export function useAutoBackup() {
       if (!auth.isAuthenticated) return;
 
       const lastChange = getLastDataChangeTime();
-      if (lastChange === 0 || lastChange <= lastBackupChangeTime.current) return;
+      if (lastChange === 0) return;
+
+      // Cross-tab coordination: skip if any tab backed up recently
+      const lastRun = parseInt(localStorage.getItem(LOCK_KEY) || '0', 10);
+      if (Date.now() - lastRun < MIN_GAP) return;
+
+      // Skip if no data changed since last backup
+      if (lastChange <= lastRun) return;
 
       backingUp.current = true;
+      localStorage.setItem(LOCK_KEY, String(Date.now()));
       try {
         await driveService.uploadBackup();
-        lastBackupChangeTime.current = lastChange;
         const deleted = await driveService.cleanupOldBackups();
-        console.log(`[auto-backup] Backed up to Google Drive${deleted ? `, cleaned up ${deleted} old backups` : ''}`);
+        console.log(`[auto-backup] Done${deleted ? `, cleaned up ${deleted} old` : ''}`);
       } catch (e) {
         console.error('[auto-backup] Failed:', e);
       } finally {
