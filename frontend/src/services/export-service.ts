@@ -412,6 +412,13 @@ export const exportService = {
    * Import data with merge or replace strategy
    */
   async importData(file: File, strategy: 'merge' | 'replace'): Promise<ImportResult> {
+    // sql.js db.run(sql, params) does NOT bind params — use prepare/run/free
+    const exec = (db: import('sql.js').Database, sql: string, params: unknown[]) => {
+      const stmt = db.prepare(sql);
+      stmt.run(params as (string | number | null | Uint8Array)[]);
+      stmt.free();
+    };
+
     const errors: string[] = [];
     const imported = {
       classes: 0,
@@ -454,7 +461,7 @@ export const exportService = {
 
       for (const cls of data.data.classes || []) {
         try {
-          db.run(
+          exec(db,
             `INSERT OR REPLACE INTO classes (id, name, academic_year, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
             [cls.id, cls.name, n(cls.academicYear) || '', n(cls.createdAt) || now, now]
           );
@@ -466,7 +473,7 @@ export const exportService = {
 
       for (const subject of data.data.subjects || []) {
         try {
-          db.run(
+          exec(db,
             `INSERT OR REPLACE INTO subjects (id, name, class_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
             [subject.id, subject.name, subject.classId, n(subject.createdAt) || now, now]
           );
@@ -478,7 +485,7 @@ export const exportService = {
 
       for (const student of data.data.students || []) {
         try {
-          db.run(
+          exec(db,
             `INSERT OR REPLACE INTO students (id, name, roll_number, class_id, parent_name, parent_phone, parent_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [student.id, student.name, student.rollNumber, student.classId, n(student.parentName), n(student.parentPhone), n(student.parentEmail), n(student.createdAt) || now, now]
           );
@@ -490,7 +497,7 @@ export const exportService = {
 
       for (const assessment of data.data.assessments || []) {
         try {
-          db.run(
+          exec(db,
             `INSERT OR REPLACE INTO assessments (id, name, type, subject_id, class_id, max_marks, date, term, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [assessment.id, assessment.name, assessment.type, assessment.subjectId, assessment.classId, n(assessment.maxMarks) || 0, n(assessment.date) || now, n(assessment.term) || 1, n(assessment.createdAt) || now, now]
           );
@@ -502,7 +509,7 @@ export const exportService = {
 
       for (const mark of data.data.marks || []) {
         try {
-          db.run(
+          exec(db,
             `INSERT OR REPLACE INTO marks (id, student_id, assessment_id, marks_obtained, remarks, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [mark.id, mark.studentId, mark.assessmentId, n(mark.marksObtained) ?? 0, n(mark.remarks), n(mark.createdAt) || now, now]
           );
@@ -514,7 +521,7 @@ export const exportService = {
 
       for (const fb of data.data.feedback || []) {
         try {
-          db.run(
+          exec(db,
             `INSERT OR REPLACE INTO feedback (id, student_id, assessment_id, message, tone, performance_level, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [fb.id, fb.studentId, fb.assessmentId, fb.message, n(fb.tone) || 'neutral', n(fb.performanceLevel) || 'average', n(fb.createdAt) || now]
           );
@@ -526,7 +533,7 @@ export const exportService = {
 
       for (const chapter of data.data.chapters || []) {
         try {
-          db.run(
+          exec(db,
             `INSERT OR REPLACE INTO chapters (id, subject_id, name, chapter_number, content, page_count, source_type, difficulty, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [chapter.id, chapter.subjectId, chapter.name, n(chapter.chapterNumber) || 1, chapter.content, n(chapter.pageCount), n(chapter.sourceType) || 'pdf', n(chapter.difficulty), n(chapter.createdAt) || now, now]
           );
@@ -538,7 +545,7 @@ export const exportService = {
 
       for (const cp of data.data.chapterPages || []) {
         try {
-          db.run(
+          exec(db,
             `INSERT OR REPLACE INTO chapter_pages (id, chapter_id, page_number, extraction, teacher_corrections, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [cp.id, cp.chapterId, cp.pageNumber, cp.extraction, n(cp.teacherCorrections), n(cp.createdAt) || now, n(cp.updatedAt) || now]
           );
@@ -550,7 +557,7 @@ export const exportService = {
 
       for (const lp of data.data.lessonPlans || []) {
         try {
-          db.run(
+          exec(db,
             `INSERT OR REPLACE INTO lesson_plans (id, chapter_id, subject_id, name, duration, objectives, sections, materials, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [lp.id, lp.chapterId, lp.subjectId, lp.name, lp.duration, lp.objectives, lp.sections, n(lp.materials), n(lp.createdAt) || now, now]
           );
@@ -562,7 +569,7 @@ export const exportService = {
 
       for (const qp of data.data.questionPapers || []) {
         try {
-          db.run(
+          exec(db,
             `INSERT OR REPLACE INTO question_papers (id, subject_id, chapter_ids, name, total_marks, duration, difficulty, template, sections, answer_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [qp.id, qp.subjectId, qp.chapterIds, qp.name, n(qp.totalMarks) || 0, n(qp.duration) || 0, n(qp.difficulty) || 'mixed', n(qp.template) || 'custom', qp.sections, n(qp.answerKey) || '[]', n(qp.createdAt) || now, now]
           );
