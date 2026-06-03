@@ -59,13 +59,24 @@ export function CloudSync() {
 
   const [isPreConfigured] = useState(() => driveService.isPreConfigured());
 
-  // Initialize state
+  // Initialize state — silently refresh token if expired
   useEffect(() => {
     const configured = driveService.isConfigured();
     setIsConfigured(configured);
     setClientId(driveService.getClientId());
-    setAuthState(driveService.getAuthState());
     setLastBackup(driveService.getLastBackupTime());
+
+    const auth = driveService.getAuthState();
+    if (auth.isAuthenticated) {
+      setAuthState(auth);
+    } else if (driveService.wasPreviouslyConnected()) {
+      driveService.silentRefresh().then((ok) => {
+        setAuthState(driveService.getAuthState());
+        if (!ok) setMessage({ type: 'error', text: 'Session expired — please reconnect' });
+      });
+    } else {
+      setAuthState(auth);
+    }
   }, []);
 
   // Load backups when authenticated
