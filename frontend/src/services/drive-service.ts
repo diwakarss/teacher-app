@@ -87,9 +87,12 @@ export const driveService = {
     const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
     const userJson = localStorage.getItem(AUTH_STATE_KEY);
 
-    // Check if token is expired
+    // Token expired — don't logout (keep user info), just report unauthenticated
+    // so silent re-auth can pick it up
     if (expiry && new Date(expiry) < new Date()) {
-      this.logout();
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_EXPIRY_KEY);
+      // Keep AUTH_STATE_KEY so we know the user was previously connected
       return { isAuthenticated: false, user: null, accessToken: null };
     }
 
@@ -109,6 +112,62 @@ export const driveService = {
       user,
       accessToken: token,
     };
+  },
+
+  /**
+   * Check if user was previously connected (has stored user info)
+   */
+  wasPreviouslyConnected(): boolean {
+    if (typeof window === 'undefined') return false;
+    return !!localStorage.getItem(AUTH_STATE_KEY);
+  },
+
+  /**
+   * Silently refresh the token without a popup (uses Google's session cookie)
+   */
+  async silentRefresh(): Promise<boolean> {
+    const clientId = this.getClientId();
+    if (!clientId) return false;
+
+    return new Promise((resolve) => {
+      const loadAndRefresh = () => {
+        if (!window.google?.accounts?.oauth2) {
+          resolve(false);
+          return;
+        }
+
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+          prompt: '',
+          callback: async (response: { access_token?: string; expires_in?: number; error?: string }) => {
+            if (response.error || !response.access_token) {
+              resolve(false);
+              return;
+            }
+
+            localStorage.setItem(TOKEN_KEY, response.access_token);
+            const expiresIn = response.expires_in || 3600;
+            const expiry = new Date(Date.now() + expiresIn * 1000);
+            localStorage.setItem(TOKEN_EXPIRY_KEY, expiry.toISOString());
+            resolve(true);
+          },
+        });
+
+        tokenClient.requestAccessToken({ prompt: '' });
+      };
+
+      if (!window.google?.accounts) {
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.onload = loadAndRefresh;
+        script.onerror = () => resolve(false);
+        document.head.appendChild(script);
+      } else {
+        loadAndRefresh();
+      }
+    });
   },
 
   /**
@@ -479,9 +538,10 @@ declare global {
           initTokenClient: (config: {
             client_id: string;
             scope: string;
+            prompt?: string;
             callback: (response: { access_token?: string; expires_in?: number; error?: string }) => void;
           }) => {
-            requestAccessToken: () => void;
+            requestAccessToken: (opts?: { prompt?: string }) => void;
           };
         };
       };
